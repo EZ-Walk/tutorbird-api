@@ -1,0 +1,654 @@
+{
+  "info": {
+    "name": "TutorBird API",
+    "description": "Unofficial Postman collection for the TutorBird integration API.\n\nTutorBird publishes API keys and a Zapier integration. It does not publish HTTP paths. Requests in **Students**, **Families**, **Calendar**, and **Payments** call `{{baseUrl}}` (default `https://api.tutorbird.com/v1`) using a community mapping of the documented operations. Treat a 404 as \"this path is not confirmed,\" not as a bug in your key.\n\nCreate a key in TutorBird under **Business Settings → Integrations → + Add API Key**. Choose **Read-Only** for the find requests, or **Read & Write** for Add Student, Update Student, and Add Payment. The key is shown once. Put it in the collection variable `apiKey` or in the TutorBird environment. This collection sends it as the `X-API-Key` header. TutorBird has not published that header name.\n\n**Webhook samples** post example payloads to `{{webhookSinkUrl}}` so you can try a receiver. They are not sent to TutorBird. Email and SMS samples are empty objects because TutorBird has not published those fields.\n\nSources, retrieved 2026-10-03:\n\n- https://support.tutorbird.com/en/articles/963-how-do-i-integrate-with-zapier\n- https://support.tutorbird.com/en/articles/965-what-can-i-do-with-tutorbird-zapier\n- https://support.tutorbird.com/en/articles/1062-zapier-triggers\n- https://support.tutorbird.com/en/articles/1063-zapier-actions\n- https://zapier.com/apps/tutorbird/integrations\n\nNot affiliated with TutorBird.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{apiKey}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.tutorbird.com/v1"
+    },
+    {
+      "key": "apiKey",
+      "value": ""
+    },
+    {
+      "key": "studentId",
+      "value": "sdt_4f8a21"
+    },
+    {
+      "key": "familyId",
+      "value": "fml_91c0ab"
+    },
+    {
+      "key": "eventId",
+      "value": "evt_77ab9001"
+    },
+    {
+      "key": "webhookSinkUrl",
+      "value": "https://httpbin.org/post"
+    }
+  ],
+  "item": [
+    {
+      "name": "Students",
+      "description": "Zapier keys: `add_student`, `update_student`, `search_student`.",
+      "item": [
+        {
+          "name": "Add student (child)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"Child\",\n  \"firstName\": \"Maya\",\n  \"lastName\": \"Chen\",\n  \"status\": \"Trial\",\n  \"email\": \"maya.chen@example.com\",\n  \"phoneNumber\": \"+1-416-555-0148\",\n  \"phoneSmsCapable\": true,\n  \"sendEmailReminders\": true,\n  \"sendSmsReminders\": false,\n  \"birthday\": \"2014-05-02\",\n  \"studentSince\": \"2026-03-09\",\n  \"skillLevel\": \"Grade 6\",\n  \"subjects\": \"Piano\",\n  \"parent\": {\n    \"firstName\": \"Elise\",\n    \"lastName\": \"Chen\",\n    \"email\": \"elise.chen@example.com\",\n    \"phoneNumber\": \"+1-416-555-0199\",\n    \"phoneSmsCapable\": true,\n    \"sendEmailReminders\": true,\n    \"sendSmsReminders\": true,\n    \"address\": \"18 King St, Toronto\"\n  }\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/students",
+            "description": "Adds a child student and the parent details the help center requires for that type.\n\nRequires a **Read & Write** key. Documented success fields are a student id (`sdt_`) and a family id (`fml_`). The path `POST /students` is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create returned 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "if (body && body.id) pm.collectionVariables.set('studentId', body.id);",
+                  "if (body && body.familyId) pm.collectionVariables.set('familyId', body.familyId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add student (adult)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"Adult\",\n  \"firstName\": \"Jordan\",\n  \"lastName\": \"Hale\",\n  \"status\": \"Active\",\n  \"email\": \"jordan.hale@example.com\",\n  \"phoneNumber\": \"+1-289-555-0114\",\n  \"phoneSmsCapable\": true,\n  \"sendEmailReminders\": true,\n  \"sendSmsReminders\": false,\n  \"studentSince\": \"2026-03-09\",\n  \"subjects\": \"Algebra\",\n  \"address\": \"42 Queen St, Hamilton\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/students",
+            "description": "Adds an adult student. Parent details are not required for this type. Requires a **Read & Write** key. Path is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create returned 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update student",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Active\",\n  \"email\": \"maya.chen@example.com\",\n  \"sendEmailReminders\": true\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/students/{{studentId}}",
+            "description": "Updates only the fields present in the body. Blank fields are omitted so TutorBird does not overwrite them. Status values are Active, Inactive, Waiting, Lead, and Trial. Article 965's Update Student Status action is this same write, limited to `status`.\n\nRequires a **Read & Write** key. Documented output is `{ \"updated\": true }`. Path is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Update returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Find student by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/students/{{studentId}}",
+            "description": "Find Student with Zapier field `StudentID`. A read-only key is enough. Path is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Find returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Find student by name or email",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/students?search=maya.chen@example.com",
+            "description": "Find Student with Zapier field `SearchText`. The help center says this is a name or email. Path is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Find returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Families",
+      "description": "Zapier keys: `search_parent`, `search_parents`.",
+      "item": [
+        {
+          "name": "Find first parent",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/parents?familyId={{familyId}}&first=true&limit=1",
+            "description": "Find Parent. The first parent is the one added to the family earliest. You can search by family id, email, or name. Path is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Find returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Find all parents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/parents?familyId={{familyId}}",
+            "description": "Find All Parents. The help center says the result is a list, one object per parent, with ids prefixed `prt_`. Path is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Find returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Calendar",
+      "description": "Zapier keys: `search_event`, `search_attendance`.",
+      "item": [
+        {
+          "name": "Find event",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/events/{{eventId}}",
+            "description": "Find Event by `EventID` (`evt_`). Attendee fields repeat once per attendee. Teacher id uses the `tch_` prefix. Path is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Find returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Find attendance records",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/students/{{studentId}}/attendance?limit=20",
+            "description": "Find Attendance Records for a student id. Zapier also accepts `orderby`; allowed values are not published, so that query param is disabled until you know one. Path is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Find returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "description": "Zapier key: `add_payment`.",
+      "item": [
+        {
+          "name": "Add payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"familyId\": \"{{familyId}}\",\n  \"amount\": 85.0,\n  \"timestamp\": \"2026-03-09 14:05:00\",\n  \"description\": \"March piano lesson\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/payments",
+            "description": "Records a payment on a family account. Zapier requires amount, timestamp, and family id. The create action returns a payment id prefixed `rcv_`. The Payment Added trigger uses a different prefix, `csh_`.\n\n`timestamp` is `yyyy-mm-dd hh:mm:ss`. The help center says you can pass Zapier's `{{zap_meta_human_now}}` when the step should use the time the Zap runs.\n\nRequires a **Read & Write** key. Path is inferred."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create returned 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Webhook samples",
+      "description": "Example payloads compiled from the TutorBird help center. Each request posts to `{{webhookSinkUrl}}` (your receiver, or httpbin by default). TutorBird's own signing, retries, and delivery URL are not published.\n\nAuth on this folder is disabled. These calls do not use your TutorBird key.",
+      "auth": {
+        "type": "noauth"
+      },
+      "item": [
+        {
+          "name": "student.added",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-TutorBird-Event",
+                "value": "student.added",
+                "description": "Sample header for your receiver. TutorBird has not published a webhook header."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"sdt_4f8a21\",\n  \"familyId\": \"fml_91c0ab\",\n  \"firstName\": \"Maya\",\n  \"lastName\": \"Chen\",\n  \"email\": \"maya.chen@example.com\",\n  \"phoneNumber\": \"+1-416-555-0148\",\n  \"phoneSmsCapable\": true,\n  \"birthday\": \"2014-05-02\",\n  \"studentSince\": \"2026-03-09\",\n  \"faceTimeId\": \"maya.chen@example.com\",\n  \"gender\": \"\",\n  \"note\": \"Prefers afternoon lessons\",\n  \"address\": \"18 King St, Toronto\",\n  \"referrer\": \"Website form\",\n  \"sendEmailReminders\": true,\n  \"sendSmsReminders\": false,\n  \"skillLevel\": \"Grade 6\",\n  \"status\": \"Trial\",\n  \"subjects\": \"Piano\",\n  \"groupTags\": \"Tuesday studio\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{webhookSinkUrl}}",
+            "description": "New Student trigger. Zapier key `student_added`. Includes family id for a later Find Parent step."
+          }
+        },
+        {
+          "name": "student.updated",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-TutorBird-Event",
+                "value": "student.updated"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"sdt_4f8a21\",\n  \"familyId\": \"fml_91c0ab\",\n  \"firstName\": \"Maya\",\n  \"lastName\": \"Chen\",\n  \"email\": \"maya.chen@example.com\",\n  \"phoneNumber\": \"+1-416-555-0148\",\n  \"phoneSmsCapable\": true,\n  \"birthday\": \"2014-05-02\",\n  \"studentSince\": \"2026-03-09\",\n  \"faceTimeId\": \"maya.chen@example.com\",\n  \"gender\": \"\",\n  \"note\": \"Moved to weekly lessons\",\n  \"referrer\": \"Website form\",\n  \"sendEmailReminders\": true,\n  \"sendSmsReminders\": false,\n  \"skillLevel\": \"Grade 6\",\n  \"status\": \"Active\",\n  \"subjects\": \"Piano\",\n  \"groupTags\": \"Tuesday studio\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{webhookSinkUrl}}",
+            "description": "Student Updated trigger. Zapier key `student_updated`. Fires on any profile change. Address is documented on New Student and is omitted here."
+          }
+        },
+        {
+          "name": "attendance.taken",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-TutorBird-Event",
+                "value": "attendance.taken"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"atn_10000001\",\n  \"eventId\": \"evt_77ab9001\",\n  \"studentId\": \"sdt_4f8a21\",\n  \"familyId\": \"fml_91c0ab\",\n  \"attendanceStatus\": \"Present\",\n  \"parentNote\": \"Arrived on time\",\n  \"privateNote\": \"\",\n  \"studentNotes\": \"Scales and a new piece\",\n  \"hasAttachments\": false,\n  \"emailReminderSent\": true,\n  \"smsReminderSent\": false\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{webhookSinkUrl}}",
+            "description": "Attendance Taken trigger. Zapier key `attendance_updated`."
+          }
+        },
+        {
+          "name": "student.added_to_event",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-TutorBird-Event",
+                "value": "student.added_to_event"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"atn_10000002\",\n  \"eventId\": \"evt_77ab9001\",\n  \"studentId\": \"sdt_4f8a21\",\n  \"familyId\": \"fml_91c0ab\",\n  \"dateTime\": \"2026-03-10 16:00:00\",\n  \"category\": \"Piano\",\n  \"teacher\": \"Priya Shah\",\n  \"attendanceStatus\": \"Unrecorded\",\n  \"hasAttachments\": false,\n  \"emailReminderSent\": false,\n  \"smsReminderSent\": false\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{webhookSinkUrl}}",
+            "description": "Student Added to Event trigger. Zapier key `attendance_added`. Teacher is a name, not a `tch_` id."
+          }
+        },
+        {
+          "name": "invoice.added",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-TutorBird-Event",
+                "value": "invoice.added"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"number\": \"inv_3000001\",\n  \"startDate\": \"2026-03-01\",\n  \"endDate\": \"2026-03-31\",\n  \"dateCreated\": \"2026-03-09\",\n  \"status\": \"Open\",\n  \"amountDue\": 85.0,\n  \"dueDate\": \"2026-03-16\",\n  \"emailed\": false,\n  \"paid\": false,\n  \"reminderDate\": \"2026-03-14\",\n  \"void\": false,\n  \"familyId\": \"fml_91c0ab\",\n  \"familyName\": \"Chen\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{webhookSinkUrl}}",
+            "description": "New Invoice trigger. Zapier key `invoice_added`. Covers manual invoices and auto-invoicing."
+          }
+        },
+        {
+          "name": "payment.added",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-TutorBird-Event",
+                "value": "payment.added"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"csh_60000001\",\n  \"date\": \"2026-03-09\",\n  \"amount\": 85.0,\n  \"description\": \"March piano lesson\",\n  \"payee\": \"Elise Chen\",\n  \"method\": \"Card\",\n  \"familyId\": \"fml_91c0ab\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{webhookSinkUrl}}",
+            "description": "Payment Added trigger. Zapier key `payment_added`. The id prefix on this event is `csh_`, which is different from the `rcv_` id returned by Add Payment."
+          }
+        },
+        {
+          "name": "email.added",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-TutorBird-Event",
+                "value": "email.added"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{webhookSinkUrl}}",
+            "description": "New Email trigger. Zapier key `email_added`. Fields are not published, so the sample body is empty."
+          }
+        },
+        {
+          "name": "sms.added",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-TutorBird-Event",
+                "value": "sms.added"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{webhookSinkUrl}}",
+            "description": "New SMS trigger. Zapier key `sms_added`. Fields are not published, so the sample body is empty."
+          }
+        }
+      ]
+    }
+  ]
+}

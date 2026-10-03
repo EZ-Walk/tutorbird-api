@@ -1,0 +1,1339 @@
+openapi: 3.1.0
+info:
+  title: TutorBird API
+  version: 0.1.0
+  summary: Unofficial specification of the TutorBird integration API.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  contact:
+    name: Unofficial community specification
+    url: https://github.com/EZ-Walk/tutorbird-api
+  description: |
+    Unofficial OpenAPI description of the TutorBird integration surface.
+
+    TutorBird lets an account owner create an API key under **Business Settings → Integrations**
+    and connect that key to Zapier. The help center documents the triggers, actions, identifier
+    prefixes, and field formats. TutorBird does not publish HTTP paths, an error catalog, or an
+    OpenAPI document of its own. `https://api.tutorbird.com` answers as an API host, and `GET /v1`
+    is a real route (it returns an error page without credentials), but resource paths below are a
+    community mapping of the documented operations. Every operation is marked `x-path-status: inferred`.
+
+    Field names, enumerations, and identifier prefixes are taken from TutorBird's help center and
+    the public Zapier app listing. Where those two sources use different names for the same input,
+    the schema description records both.
+
+    This project is not affiliated with TutorBird. TutorBird is a trademark of its owner.
+
+    ## Sources
+
+    Retrieved 2026-10-03.
+
+    - [How do I integrate with Zapier?](https://support.tutorbird.com/en/articles/963-how-do-i-integrate-with-zapier)
+    - [What can I do with TutorBird & Zapier?](https://support.tutorbird.com/en/articles/965-what-can-i-do-with-tutorbird-zapier)
+    - [Zapier Triggers](https://support.tutorbird.com/en/articles/1062-zapier-triggers)
+    - [Zapier Actions](https://support.tutorbird.com/en/articles/1063-zapier-actions)
+    - [Zapier app listing](https://zapier.com/apps/tutorbird/integrations)
+
+    ## Authentication
+
+    Create a key in TutorBird:
+
+    1. Open the account menu and choose **Business Settings**.
+    2. Open the **Integrations** tab and choose **+ Add API Key**.
+    3. Name the key and choose **Read-Only** or **Read & Write**.
+    4. Copy the key from the dialog. TutorBird shows it once.
+
+    Read-only keys can supply data to an external app. Read & write keys can also change
+    TutorBird data, such as adding a student. A multi-tutor account requires the Administrator
+    privilege to create a key.
+
+    TutorBird has not published the HTTP header that carries the key. This spec sends it as
+    `X-API-Key`. Confirm that header against a live key before depending on it.
+
+    ## Identifier prefixes
+
+    | Resource | Prefix | Example shape |
+    | --- | --- | --- |
+    | Student | `sdt_` | `sdt_xxxxxx` |
+    | Family | `fml_` | `fml_xxxxxx` |
+    | Parent | `prt_` | `prt_xxxxxx` |
+    | Event | `evt_` | `evt_xxxxxxxx` |
+    | Attendance | `atn_` | `atn_xxxxxxxx` |
+    | Teacher | `tch_` | `tch_xxxxxx` |
+    | Invoice number | `inv_` | `inv_xxxxxxx` |
+    | Payment created by Add Payment | `rcv_` | `rcv_xxxxxxxx` |
+    | Payment on the Payment Added trigger | `csh_` | `csh_xxxxxxxx` |
+
+    The `rcv_` and `csh_` values are both published as payment identifiers, on different operations.
+    This spec does not treat them as the same field.
+
+servers:
+  - url: https://api.tutorbird.com/v1
+    description: >
+      TutorBird API host. Paths on this server are a community mapping of documented
+      Zapier operations and are not confirmed by TutorBird.
+
+security:
+  - apiKey: []
+
+tags:
+  - name: Students
+    description: Create, update, and find student profiles.
+  - name: Families
+    description: Find parents on a family account.
+  - name: Calendar
+    description: Find events and attendance.
+  - name: Payments
+    description: Record a payment on a family account.
+  - name: Webhooks
+    description: >
+      Events TutorBird can emit. Native webhook signing and retry behavior are not published.
+      Payload fields below are the fields TutorBird documents for the matching Zapier trigger.
+
+paths:
+  /students:
+    get:
+      tags: [Students]
+      operationId: searchStudents
+      x-path-status: inferred
+      x-zapier-key: search_student
+      x-required-permission: read
+      summary: Find students by name or email
+      description: |
+        Finds students from search text. Zapier field name is `SearchText`. The help center
+        says that text is a name or email. Use `GET /students/{studentId}` when you already
+        have an id.
+      parameters:
+        - name: search
+          in: query
+          required: true
+          description: Name or email. Zapier field `SearchText`.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching students. Find Student may return one record.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Student"
+              example:
+                - id: sdt_4f8a21
+                  active: true
+                  firstName: Maya
+                  lastName: Chen
+                  fullName: Maya Chen
+                  status: Trial
+                  email: maya.chen@example.com
+                  familyId: fml_91c0ab
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Students]
+      operationId: addStudent
+      x-path-status: inferred
+      x-zapier-key: add_student
+      x-required-permission: read-write
+      summary: Add a student
+      description: |
+        Adds a student to the TutorBird account.
+
+        Required inputs published by Zapier are student type, first name, last name, and status.
+        The help center says a **Child** student also needs parent details. An **Adult** student
+        does not.
+
+        On success, TutorBird returns a student id (`sdt_`) and a family id (`fml_`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddStudentRequest"
+            examples:
+              child:
+                summary: Child student with a parent
+                value:
+                  type: Child
+                  firstName: Maya
+                  lastName: Chen
+                  status: Trial
+                  email: maya.chen@example.com
+                  phoneNumber: "+1-416-555-0148"
+                  phoneSmsCapable: true
+                  sendEmailReminders: true
+                  sendSmsReminders: false
+                  birthday: "2014-05-02"
+                  studentSince: "2026-03-09"
+                  skillLevel: Grade 6
+                  subjects: Piano
+                  parent:
+                    firstName: Elise
+                    lastName: Chen
+                    email: elise.chen@example.com
+                    phoneNumber: "+1-416-555-0199"
+                    phoneSmsCapable: true
+                    sendEmailReminders: true
+                    sendSmsReminders: true
+                    address: 18 King St, Toronto
+              adult:
+                summary: Adult student
+                value:
+                  type: Adult
+                  firstName: Jordan
+                  lastName: Hale
+                  status: Active
+                  email: jordan.hale@example.com
+                  phoneNumber: "+1-289-555-0114"
+                  phoneSmsCapable: true
+                  sendEmailReminders: true
+                  sendSmsReminders: false
+                  studentSince: "2026-03-09"
+                  subjects: Algebra
+      responses:
+        "201":
+          description: Student created. TutorBird documents these two identifiers as the output.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddStudentResult"
+              example:
+                id: sdt_4f8a21
+                familyId: fml_91c0ab
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /students/{studentId}:
+    parameters:
+      - $ref: "#/components/parameters/studentId"
+    get:
+      tags: [Students]
+      operationId: findStudent
+      x-path-status: inferred
+      x-zapier-key: search_student
+      x-required-permission: read
+      summary: Find a student by id
+      description: |
+        Finds one student by id. Zapier field name is `StudentID`. Search by name or email
+        with `GET /students?search=`.
+      responses:
+        "200":
+          description: Matching student. Group-tag rows are returned per tag.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+              example:
+                id: sdt_4f8a21
+                active: true
+                firstName: Maya
+                lastName: Chen
+                fullName: Maya Chen
+                status: Trial
+                email: maya.chen@example.com
+                phoneNumber: "+1-416-555-0148"
+                phoneSmsCapable: true
+                sendEmailReminders: true
+                sendSmsReminders: false
+                birthday: "2014-05-02"
+                studentSince: "2026-03-09"
+                skillLevel: Grade 6
+                faceTimeId: maya.chen@example.com
+                familyId: fml_91c0ab
+                note: Prefers afternoon lessons
+                subjects: Piano
+                groups:
+                  - id: piano-tue
+                    note: Tuesday studio
+                    color: "#2F6FED"
+                accessStatus: Invited
+                lastLogin: "2026-03-01"
+                nextLesson: "2026-03-10 16:00:00"
+                timeZone: America/Toronto
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Students]
+      operationId: updateStudent
+      x-path-status: inferred
+      x-zapier-key: update_student
+      x-required-permission: read-write
+      summary: Update a student
+      description: |
+        Updates student fields. The help center says only fields that contain data are written;
+        leave a field out to keep the current value. Sending a value overwrites that field.
+        It does not append.
+
+        Article 965 also names an **Update Student Status** action. The current Zapier listing
+        and the detailed actions article expose status as a field on **Update Student**, which
+        is how this operation models it.
+
+        The March 2026 product update removed Skype from student profiles and labels stored
+        values as deprecated. `skypeUsername` is included because the Zapier action still lists it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStudentRequest"
+            example:
+              status: Active
+              email: maya.chen@example.com
+              sendEmailReminders: true
+      responses:
+        "200":
+          description: TutorBird reports whether the update was applied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateStudentResult"
+              example:
+                updated: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /parents:
+    get:
+      tags: [Families]
+      operationId: findParents
+      x-path-status: inferred
+      x-zapier-key: search_parent
+      x-required-permission: read
+      summary: Find parents
+      description: |
+        Finds parents by family id or by search text (name or email).
+
+        Set `first` to `true` to match **Find Parent**, which returns the earliest parent added
+        to the family. Omit `first` or set it to `false` to match **Find All Parents**, which
+        returns every match. Zapier keys are `search_parent` and `search_parents`.
+
+        The help center says Find Parent accepts a family id, email, or name. The Zapier listing
+        names `FamilyID`, `SearchText`, and `limit`.
+      parameters:
+        - name: familyId
+          in: query
+          required: false
+          description: Family id (`fml_`). Zapier field `FamilyID`.
+          schema:
+            $ref: "#/components/schemas/FamilyId"
+        - $ref: "#/components/parameters/search"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of parents to return. Published on Find Parent.
+          schema:
+            type: integer
+            minimum: 1
+        - name: first
+          in: query
+          required: false
+          description: When true, return only the first parent added to the family.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Matching parents. Find Parent is the first item of this list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Parent"
+              example:
+                - id: prt_10aa20
+                  familyId: fml_91c0ab
+                  firstName: Elise
+                  lastName: Chen
+                  fullName: Elise Chen
+                  email: elise.chen@example.com
+                  homePhone: "+1-416-555-0100"
+                  homePhoneSmsCapable: false
+                  workPhone: "+1-416-555-0160"
+                  workPhoneSmsCapable: false
+                  mobilePhone: "+1-416-555-0199"
+                  mobilePhoneSmsCapable: true
+                  address: 18 King St, Toronto
+                  sendEmailReminders: true
+                  sendSmsReminders: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /events/{eventId}:
+    parameters:
+      - $ref: "#/components/parameters/eventId"
+    get:
+      tags: [Calendar]
+      operationId: findEvent
+      x-path-status: inferred
+      x-zapier-key: search_event
+      x-required-permission: read
+      summary: Find an event
+      description: |
+        Retrieves one calendar event by id. Attendee-specific fields are returned once per
+        attendee. Zapier field name is `EventID`.
+      responses:
+        "200":
+          description: The event, including attendees.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+              example:
+                id: evt_77ab9001
+                allDay: false
+                startDateTime: "2026-03-10 16:00:00"
+                endDateTime: "2026-03-10 16:45:00"
+                durationMinutes: 45
+                category: Piano
+                location: Studio A
+                description: Weekly lesson
+                note: Bring the new book
+                currentAttendeeCount: 1
+                maxParticipants: 1
+                makeupCreditRequired: false
+                teacherId: tch_2200aa
+                teacherFirstName: Priya
+                teacherLastName: Shah
+                teacherFullName: Priya Shah
+                attendees:
+                  - studentId: sdt_4f8a21
+                    firstName: Maya
+                    lastName: Chen
+                    fullName: Maya Chen
+                    attendanceStatus: Unrecorded
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /students/{studentId}/attendance:
+    parameters:
+      - $ref: "#/components/parameters/studentId"
+    get:
+      tags: [Calendar]
+      operationId: findAttendance
+      x-path-status: inferred
+      x-zapier-key: search_attendance
+      x-required-permission: read
+      summary: Find attendance records
+      description: |
+        Finds attendance for one student. Zapier requires `StudentID` and accepts optional
+        `limit` and `orderby`. The help center publishes the student id and limit.
+
+        The actions article does not publish the attendance search output columns. The schema
+        uses the fields published for the **Attendance Taken** trigger, which is the documented
+        attendance record.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: Maximum records to return.
+        - name: orderby
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Sort expression. Zapier lists the parameter name `orderby` and does not publish
+            the allowed values.
+      responses:
+        "200":
+          description: Attendance records for the student.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceRecord"
+              example:
+                - id: atn_10000001
+                  eventId: evt_77ab9001
+                  studentId: sdt_4f8a21
+                  familyId: fml_91c0ab
+                  attendanceStatus: Present
+                  parentNote: Arrived on time
+                  privateNote: ""
+                  studentNotes: Scales and a new piece
+                  hasAttachments: false
+                  emailReminderSent: true
+                  smsReminderSent: false
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /payments:
+    post:
+      tags: [Payments]
+      operationId: addPayment
+      x-path-status: inferred
+      x-zapier-key: add_payment
+      x-required-permission: read-write
+      summary: Add a payment
+      description: |
+        Records a payment on a family account.
+
+        Zapier requires `Amount`, `Timestamp`, and `FamilyID`. Description is optional.
+        The help center names the timestamp field **Date & Time**.
+
+        The create action returns a payment id with the `rcv_` prefix. The **Payment Added**
+        trigger identifies the payment with a `csh_` prefix. Both are documented; this response
+        returns the create-action id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPaymentRequest"
+            example:
+              familyId: fml_91c0ab
+              amount: 85.00
+              timestamp: "2026-03-09 14:05:00"
+              description: March piano lesson
+      responses:
+        "201":
+          description: Payment recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddPaymentResult"
+              example:
+                id: rcv_50000001
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+webhooks:
+  studentAdded:
+    post:
+      operationId: studentAdded
+      x-zapier-key: student_added
+      summary: New student
+      description: |
+        Fires when a student is added in the app or through a signup form. Includes the family
+        id so a later step can find parents.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentEvent"
+      responses:
+        "200":
+          description: Acknowledge receipt.
+
+  studentUpdated:
+    post:
+      operationId: studentUpdated
+      x-zapier-key: student_updated
+      summary: Student updated
+      description: |
+        Fires when any student profile field changes, so it can run often. TutorBird recommends
+        filtering on the field you care about, such as status or email.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentEvent"
+      responses:
+        "200":
+          description: Acknowledge receipt.
+
+  attendanceTaken:
+    post:
+      operationId: attendanceTaken
+      x-zapier-key: attendance_updated
+      summary: Attendance taken
+      description: Fires when attendance is taken or edited for a calendar event.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceRecord"
+      responses:
+        "200":
+          description: Acknowledge receipt.
+
+  studentAddedToEvent:
+    post:
+      operationId: studentAddedToEvent
+      x-zapier-key: attendance_added
+      summary: Student added to an event
+      description: Fires when a student is added to a calendar event.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentAddedToEvent"
+      responses:
+        "200":
+          description: Acknowledge receipt.
+
+  invoiceAdded:
+    post:
+      operationId: invoiceAdded
+      x-zapier-key: invoice_added
+      summary: New invoice
+      description: Fires when an invoice is created manually or by auto-invoicing.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Invoice"
+      responses:
+        "200":
+          description: Acknowledge receipt.
+
+  paymentAdded:
+    post:
+      operationId: paymentAdded
+      x-zapier-key: payment_added
+      summary: Payment added
+      description: |
+        Fires when a payment is recorded on a family account, including manual payments,
+        online payments, and Auto Pay.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentEvent"
+      responses:
+        "200":
+          description: Acknowledge receipt.
+
+  emailAdded:
+    post:
+      operationId: emailAdded
+      x-zapier-key: email_added
+      summary: New email
+      description: |
+        Fires when a new email message is created. The Zapier listing publishes the event and
+        does not publish its fields. The payload is left open.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnpublishedEvent"
+      responses:
+        "200":
+          description: Acknowledge receipt.
+
+  smsAdded:
+    post:
+      operationId: smsAdded
+      x-zapier-key: sms_added
+      summary: New SMS
+      description: |
+        Fires when a new SMS message is created. The Zapier listing publishes the event and
+        does not publish its fields. The payload is left open.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnpublishedEvent"
+      responses:
+        "200":
+          description: Acknowledge receipt.
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API key created under Business Settings → Integrations.
+        The header name is not published by TutorBird. This spec uses `X-API-Key`.
+
+  parameters:
+    studentId:
+      name: studentId
+      in: path
+      required: true
+      description: Student id (`sdt_`).
+      schema:
+        $ref: "#/components/schemas/StudentId"
+    eventId:
+      name: eventId
+      in: path
+      required: true
+      description: Event id (`evt_`).
+      schema:
+        $ref: "#/components/schemas/EventId"
+    search:
+      name: search
+      in: query
+      required: false
+      description: Name or email. Zapier field `SearchText`.
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: |
+        Conventional status when the API key is missing or rejected.
+        TutorBird has not published its error body.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: |
+        Conventional status when a read-only key calls a write operation.
+        TutorBird documents the permission split and does not publish this status code.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: |
+        Conventional status when the id does not match a record.
+        TutorBird has not published this status code.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    StudentId:
+      type: string
+      pattern: "^sdt_.+"
+      example: sdt_4f8a21
+      description: Student identifier. TutorBird documents the `sdt_` prefix.
+
+    FamilyId:
+      type: string
+      pattern: "^fml_.+"
+      example: fml_91c0ab
+      description: Family identifier. TutorBird documents the `fml_` prefix.
+
+    ParentId:
+      type: string
+      pattern: "^prt_.+"
+      example: prt_10aa20
+      description: Parent identifier. TutorBird documents the `prt_` prefix.
+
+    EventId:
+      type: string
+      pattern: "^evt_.+"
+      example: evt_77ab9001
+      description: Event identifier. TutorBird documents the `evt_` prefix.
+
+    AttendanceId:
+      type: string
+      pattern: "^atn_.+"
+      example: atn_10000001
+      description: Attendance identifier. TutorBird documents the `atn_` prefix.
+
+    TeacherId:
+      type: string
+      pattern: "^tch_.+"
+      example: tch_2200aa
+      description: Teacher identifier. TutorBird documents the `tch_` prefix.
+
+    InvoiceNumber:
+      type: string
+      pattern: "^inv_.+"
+      example: inv_3000001
+      description: Invoice number. TutorBird documents the `inv_` prefix.
+
+    ReceiptId:
+      type: string
+      pattern: "^rcv_.+"
+      example: rcv_50000001
+      description: Payment id returned by Add Payment. TutorBird documents the `rcv_` prefix.
+
+    CashEntryId:
+      type: string
+      pattern: "^csh_.+"
+      example: csh_60000001
+      description: Payment id on the Payment Added trigger. TutorBird documents the `csh_` prefix.
+
+    DateOnly:
+      type: string
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+      example: "2026-03-09"
+      description: Calendar date formatted `yyyy-mm-dd`.
+
+    DateTimeLocal:
+      type: string
+      pattern: "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"
+      example: "2026-03-10 16:00:00"
+      description: |
+        Local date and time formatted `yyyy-mm-dd hh:mm:ss`. TutorBird does not document
+        a numeric offset on these values. Find Student returns a separate time zone.
+
+    StudentType:
+      type: string
+      enum: [Child, Adult]
+      description: Published student types.
+
+    StudentStatus:
+      type: string
+      enum: [Active, Inactive, Waiting, Lead, Trial]
+      description: Published student statuses.
+
+    InvoiceStatus:
+      type: string
+      enum: [Paid, Open]
+      description: Published invoice status values. A separate `paid` boolean is also published.
+
+    AttendanceStatus:
+      type: string
+      description: |
+        Attendance status text. Documented examples are Unrecorded, Present, and Absent.
+        The full list is not published.
+      examples: [Unrecorded, Present, Absent]
+
+    ParentInput:
+      type: object
+      description: Parent details required by the help center when the student type is Child.
+      required: [firstName, lastName]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        address:
+          type: string
+        email:
+          type: string
+          format: email
+        phoneNumber:
+          type: string
+        phoneSmsCapable:
+          type: boolean
+          description: Help center label "Parent Phone Number SMS Capable".
+        sendEmailReminders:
+          type: boolean
+        sendSmsReminders:
+          type: boolean
+
+    AddStudentRequest:
+      type: object
+      required: [type, firstName, lastName, status]
+      properties:
+        type:
+          $ref: "#/components/schemas/StudentType"
+        firstName:
+          type: string
+          description: Zapier field `studentFirstName`.
+        lastName:
+          type: string
+          description: Zapier field `studentLastName`.
+        status:
+          $ref: "#/components/schemas/StudentStatus"
+        email:
+          type: string
+          format: email
+          description: Zapier field `studentEmail`.
+        phoneNumber:
+          type: string
+          description: Zapier field `studentPhoneNumber`.
+        phoneSmsCapable:
+          type: boolean
+          description: Zapier field `studentPhoneSMSCapable`.
+        sendEmailReminders:
+          type: boolean
+          description: Zapier field `studentSendEmailReminder`.
+        sendSmsReminders:
+          type: boolean
+          description: Zapier field `studentSendSMSReminder`.
+        birthday:
+          allOf:
+            - $ref: "#/components/schemas/DateOnly"
+          description: Zapier field `studentBirthday`.
+        studentSince:
+          allOf:
+            - $ref: "#/components/schemas/DateOnly"
+          description: Zapier field `studentSince`.
+        skillLevel:
+          type: string
+          description: Zapier field `studentSkillLevel`. Free text.
+        gender:
+          type: string
+          description: Zapier field `studentGender`. Free text. The allowed values are not published.
+        referrer:
+          type: string
+          description: Zapier field `studentReferrer`.
+        note:
+          type: string
+          description: Zapier field `studentNote`.
+        skypeUsername:
+          type: string
+          deprecated: true
+          description: |
+            Zapier field `studentSkypeUsername`. TutorBird removed the Skype profile field in
+            March 2026 and labels stored content as deprecated.
+        school:
+          type: string
+          description: Zapier field `studentSchool`.
+        faceTimeId:
+          type: string
+          description: Zapier field `studentFaceTimeID`.
+        groupTags:
+          type: string
+          description: Zapier field `studentGroupTags`. Published as text.
+        subjects:
+          type: string
+          description: Zapier field `studentSubjectTypes`. Published as text.
+        parent:
+          $ref: "#/components/schemas/ParentInput"
+
+    AddStudentResult:
+      type: object
+      required: [id, familyId]
+      properties:
+        id:
+          $ref: "#/components/schemas/StudentId"
+        familyId:
+          $ref: "#/components/schemas/FamilyId"
+
+    UpdateStudentRequest:
+      type: object
+      description: |
+        All properties are optional. Omit a property to leave the stored value unchanged.
+        Zapier uses PascalCase names on this action (`FirstName`, `StudentID`, and so on).
+      properties:
+        status:
+          $ref: "#/components/schemas/StudentStatus"
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phoneNumber:
+          type: string
+        phoneSmsCapable:
+          type: boolean
+          description: Zapier field `PhoneSMSCapable`.
+        sendEmailReminders:
+          type: boolean
+        sendSmsReminders:
+          type: boolean
+        birthday:
+          $ref: "#/components/schemas/DateOnly"
+        studentSince:
+          $ref: "#/components/schemas/DateOnly"
+        skillLevel:
+          type: string
+        gender:
+          type: string
+        referrer:
+          type: string
+        note:
+          type: string
+        skypeUsername:
+          type: string
+          deprecated: true
+        school:
+          type: string
+        faceTimeId:
+          type: string
+        subjects:
+          type: string
+          description: Zapier field `SubjectTypes`.
+        groupTagIds:
+          type: string
+          description: |
+            Zapier field `GroupTagsIDs`. The help center describes group tags as a static
+            dropdown or the value "Custom".
+        address:
+          type: string
+          description: Help center field "Adult Student Address". Zapier field `AdultStudentAddress`.
+        preferredInvoiceRecipient:
+          type: boolean
+          description: Help center field for adult students. Not listed on the Zapier key list.
+        includeInContactList:
+          type: boolean
+          description: Help center field for adult students. Not listed on the Zapier key list.
+        homePhone:
+          type: string
+          description: Help center field for adult students.
+        homePhoneSmsCapable:
+          type: boolean
+        workPhone:
+          type: string
+        workPhoneSmsCapable:
+          type: boolean
+
+    UpdateStudentResult:
+      type: object
+      required: [updated]
+      properties:
+        updated:
+          type: boolean
+          description: Help center output "Updated".
+
+    StudentGroup:
+      type: object
+      description: One group tag. Find Student returns these fields once per tag.
+      properties:
+        id:
+          type: string
+          description: Help center field "Student Group ID".
+        note:
+          type: string
+        color:
+          type: string
+
+    Student:
+      type: object
+      description: Student returned by Find Student.
+      properties:
+        id:
+          $ref: "#/components/schemas/StudentId"
+        active:
+          type: boolean
+        birthday:
+          $ref: "#/components/schemas/DateOnly"
+        studentSince:
+          $ref: "#/components/schemas/DateOnly"
+        email:
+          type: string
+        faceTimeId:
+          type: string
+        familyId:
+          $ref: "#/components/schemas/FamilyId"
+        firstName:
+          type: string
+        fullName:
+          type: string
+        lastName:
+          type: string
+        gender:
+          type: string
+        note:
+          type: string
+        sendEmailReminders:
+          type: boolean
+          description: Help center field "Email Reminders Enabled".
+        sendSmsReminders:
+          type: boolean
+          description: Help center field "SMS reminders Enabled".
+        skillLevel:
+          type: string
+        status:
+          $ref: "#/components/schemas/StudentStatus"
+        subjects:
+          type: string
+          description: Present on the New Student trigger. Named "Student Groups (Group Tags)" separately on Find Student.
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentGroup"
+        phoneNumber:
+          type: string
+        phoneSmsCapable:
+          type: boolean
+          description: Help center field "SMS Enabled" on Find Student, and "Texting Allowed" on the triggers.
+        accessStatus:
+          type: string
+        lastLogin:
+          $ref: "#/components/schemas/DateOnly"
+        nextLesson:
+          $ref: "#/components/schemas/DateTimeLocal"
+        timeZone:
+          type: string
+
+    StudentEvent:
+      type: object
+      description: |
+        Payload documented for New Student and Student Updated. Address and the adult-student
+        parent id are called out in the help center tables.
+      properties:
+        id:
+          $ref: "#/components/schemas/StudentId"
+        adultParentId:
+          $ref: "#/components/schemas/ParentId"
+          description: Present for adult students only. Help center label "Adult Student Parent ID".
+        birthday:
+          $ref: "#/components/schemas/DateOnly"
+        studentSince:
+          $ref: "#/components/schemas/DateOnly"
+        email:
+          type: string
+        faceTimeId:
+          type: string
+        familyId:
+          $ref: "#/components/schemas/FamilyId"
+        firstName:
+          type: string
+        lastName:
+          type: string
+        gender:
+          type: string
+        note:
+          type: string
+        address:
+          type: string
+          description: Published on New Student. Absent from the Student Updated table.
+        referrer:
+          type: string
+        sendEmailReminders:
+          type: boolean
+        sendSmsReminders:
+          type: boolean
+        skillLevel:
+          type: string
+        status:
+          $ref: "#/components/schemas/StudentStatus"
+        subjects:
+          type: string
+        phoneNumber:
+          type: string
+        phoneSmsCapable:
+          type: boolean
+          description: Help center field "Texting Allowed".
+        groupTags:
+          type: string
+
+    Parent:
+      type: object
+      description: |
+        One parent from Find Parent or Find All Parents. The help center table labels the work
+        telephone row as True/False; the surrounding rows show a telephone number plus a
+        texting flag, and this schema follows that pattern.
+      properties:
+        id:
+          $ref: "#/components/schemas/ParentId"
+        familyId:
+          $ref: "#/components/schemas/FamilyId"
+        firstName:
+          type: string
+        lastName:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        homePhone:
+          type: string
+        homePhoneSmsCapable:
+          type: boolean
+        workPhone:
+          type: string
+        workPhoneSmsCapable:
+          type: boolean
+        mobilePhone:
+          type: string
+        mobilePhoneSmsCapable:
+          type: boolean
+        address:
+          type: string
+        sendEmailReminders:
+          type: boolean
+        sendSmsReminders:
+          type: boolean
+
+    Attendee:
+      type: object
+      properties:
+        studentId:
+          $ref: "#/components/schemas/StudentId"
+        firstName:
+          type: string
+        lastName:
+          type: string
+        fullName:
+          type: string
+        attendanceStatus:
+          $ref: "#/components/schemas/AttendanceStatus"
+
+    Event:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/EventId"
+        allDay:
+          type: boolean
+        attendees:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attendee"
+        currentAttendeeCount:
+          type: number
+        description:
+          type: string
+        durationMinutes:
+          type: number
+        category:
+          type: string
+        location:
+          type: string
+        maxParticipants:
+          type: number
+        makeupCreditRequired:
+          type: boolean
+        note:
+          type: string
+        teacherId:
+          $ref: "#/components/schemas/TeacherId"
+        teacherFirstName:
+          type: string
+        teacherLastName:
+          type: string
+        teacherFullName:
+          type: string
+        startDateTime:
+          $ref: "#/components/schemas/DateTimeLocal"
+        endDateTime:
+          $ref: "#/components/schemas/DateTimeLocal"
+
+    AttendanceRecord:
+      type: object
+      description: Attendance record from the Attendance Taken trigger and the attendance search.
+      properties:
+        id:
+          $ref: "#/components/schemas/AttendanceId"
+        eventId:
+          $ref: "#/components/schemas/EventId"
+        studentId:
+          $ref: "#/components/schemas/StudentId"
+        familyId:
+          $ref: "#/components/schemas/FamilyId"
+        attendanceStatus:
+          $ref: "#/components/schemas/AttendanceStatus"
+        parentNote:
+          type: string
+        privateNote:
+          type: string
+        studentNotes:
+          type: string
+        hasAttachments:
+          type: boolean
+        emailReminderSent:
+          type: boolean
+        smsReminderSent:
+          type: boolean
+
+    StudentAddedToEvent:
+      type: object
+      description: Payload for the Student Added to Event trigger. Zapier key `attendance_added`.
+      properties:
+        id:
+          $ref: "#/components/schemas/AttendanceId"
+        eventId:
+          $ref: "#/components/schemas/EventId"
+        studentId:
+          $ref: "#/components/schemas/StudentId"
+        dateTime:
+          $ref: "#/components/schemas/DateTimeLocal"
+        category:
+          type: string
+        teacher:
+          type: string
+          description: Teacher name as text. This trigger does not publish a teacher id.
+        familyId:
+          $ref: "#/components/schemas/FamilyId"
+        attendanceStatus:
+          $ref: "#/components/schemas/AttendanceStatus"
+        hasAttachments:
+          type: boolean
+        emailReminderSent:
+          type: boolean
+        smsReminderSent:
+          type: boolean
+
+    Invoice:
+      type: object
+      properties:
+        number:
+          $ref: "#/components/schemas/InvoiceNumber"
+        startDate:
+          $ref: "#/components/schemas/DateOnly"
+        endDate:
+          $ref: "#/components/schemas/DateOnly"
+        dateCreated:
+          $ref: "#/components/schemas/DateOnly"
+        status:
+          $ref: "#/components/schemas/InvoiceStatus"
+        amountDue:
+          type: number
+        dueDate:
+          $ref: "#/components/schemas/DateOnly"
+        emailed:
+          type: boolean
+        paid:
+          type: boolean
+        reminderDate:
+          $ref: "#/components/schemas/DateOnly"
+        void:
+          type: boolean
+        familyId:
+          $ref: "#/components/schemas/FamilyId"
+        familyName:
+          type: string
+
+    AddPaymentRequest:
+      type: object
+      required: [amount, timestamp, familyId]
+      properties:
+        amount:
+          type: number
+          description: Zapier field `Amount`.
+        timestamp:
+          allOf:
+            - $ref: "#/components/schemas/DateTimeLocal"
+          description: Zapier field `Timestamp`. Help center label "Date & Time".
+        familyId:
+          $ref: "#/components/schemas/FamilyId"
+        description:
+          type: string
+
+    AddPaymentResult:
+      type: object
+      required: [id]
+      properties:
+        id:
+          $ref: "#/components/schemas/ReceiptId"
+
+    PaymentEvent:
+      type: object
+      description: Payload for the Payment Added trigger.
+      properties:
+        id:
+          $ref: "#/components/schemas/CashEntryId"
+        date:
+          $ref: "#/components/schemas/DateOnly"
+        amount:
+          type: number
+        description:
+          type: string
+        payee:
+          type: string
+        method:
+          type: string
+          description: Payment method text. The allowed values are not published.
+        familyId:
+          $ref: "#/components/schemas/FamilyId"
+
+    UnpublishedEvent:
+      type: object
+      description: |
+        TutorBird publishes this event through Zapier and does not publish its fields.
+        Additional properties are allowed so a captured payload can still be validated loosely.
+      additionalProperties: true
+
+    Error:
+      type: object
+      description: |
+        Placeholder error body. TutorBird has not published an error schema. Do not depend
+        on these property names.
+      properties:
+        message:
+          type: string

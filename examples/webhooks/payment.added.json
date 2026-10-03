@@ -1,0 +1,9 @@
+{
+  "id": "csh_60000001",
+  "date": "2026-03-09",
+  "amount": 85.0,
+  "description": "March piano lesson",
+  "payee": "Elise Chen",
+  "method": "Card",
+  "familyId": "fml_91c0ab"
+}

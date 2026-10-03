@@ -1,0 +1,13 @@
+{
+  "id": "atn_10000002",
+  "eventId": "evt_77ab9001",
+  "studentId": "sdt_4f8a21",
+  "familyId": "fml_91c0ab",
+  "dateTime": "2026-03-10 16:00:00",
+  "category": "Piano",
+  "teacher": "Priya Shah",
+  "attendanceStatus": "Unrecorded",
+  "hasAttachments": false,
+  "emailReminderSent": false,
+  "smsReminderSent": false
+}

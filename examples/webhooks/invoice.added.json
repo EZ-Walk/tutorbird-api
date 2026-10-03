@@ -1,0 +1,15 @@
+{
+  "number": "inv_3000001",
+  "startDate": "2026-03-01",
+  "endDate": "2026-03-31",
+  "dateCreated": "2026-03-09",
+  "status": "Open",
+  "amountDue": 85.0,
+  "dueDate": "2026-03-16",
+  "emailed": false,
+  "paid": false,
+  "reminderDate": "2026-03-14",
+  "void": false,
+  "familyId": "fml_91c0ab",
+  "familyName": "Chen"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "sdt_4f8a21",
+  "familyId": "fml_91c0ab",
+  "firstName": "Maya",
+  "lastName": "Chen",
+  "email": "maya.chen@example.com",
+  "phoneNumber": "+1-416-555-0148",
+  "phoneSmsCapable": true,
+  "birthday": "2014-05-02",
+  "studentSince": "2026-03-09",
+  "faceTimeId": "maya.chen@example.com",
+  "note": "Prefers afternoon lessons",
+  "address": "18 King St, Toronto",
+  "referrer": "Website form",
+  "sendEmailReminders": true,
+  "sendSmsReminders": false,
+  "skillLevel": "Grade 6",
+  "status": "Trial",
+  "subjects": "Piano",
+  "groupTags": "Tuesday studio"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "atn_10000001",
+  "eventId": "evt_77ab9001",
+  "studentId": "sdt_4f8a21",
+  "familyId": "fml_91c0ab",
+  "attendanceStatus": "Present",
+  "parentNote": "Arrived on time",
+  "privateNote": "",
+  "studentNotes": "Scales and a new piece",
+  "hasAttachments": false,
+  "emailReminderSent": true,
+  "smsReminderSent": false
+}

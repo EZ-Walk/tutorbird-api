@@ -40,7 +40,7 @@ Email and SMS events are listed by Zapier without fields. Their schemas accept a
 3. Select the **TutorBird** environment and paste the key into `apiKey`.
 4. Run a find request with a real `sdt_` or `evt_` id from your account.
 
-The collection sends the key as `X-API-Key`. TutorBird has not published the header name. If a live key returns 401, that header is the first thing to change.
+The collection sends the key as `Authorization: Bearer <apiKey>`.
 
 Webhook sample requests post to `webhookSinkUrl`, which defaults to `https://httpbin.org/post`. Point it at your own receiver to try the payloads. Those requests do not call TutorBird and do not send your API key.
 

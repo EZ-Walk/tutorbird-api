@@ -1,25 +1,15 @@
 {
   "info": {
     "name": "TutorBird API",
-    "description": "Unofficial Postman collection for the TutorBird integration API.\n\nTutorBird publishes API keys and a Zapier integration. It does not publish HTTP paths. Requests in **Students**, **Families**, **Calendar**, and **Payments** call `{{baseUrl}}` (default `https://api.tutorbird.com/v1`) using a community mapping of the documented operations. Treat a 404 as \"this path is not confirmed,\" not as a bug in your key.\n\nCreate a key in TutorBird under **Business Settings → Integrations → + Add API Key**. Choose **Read-Only** for the find requests, or **Read & Write** for Add Student, Update Student, and Add Payment. The key is shown once. Put it in the collection variable `apiKey` or in the TutorBird environment. This collection sends it as the `X-API-Key` header. TutorBird has not published that header name.\n\n**Webhook samples** post example payloads to `{{webhookSinkUrl}}` so you can try a receiver. They are not sent to TutorBird. Email and SMS samples are empty objects because TutorBird has not published those fields.\n\nSources, retrieved 2026-10-03:\n\n- https://support.tutorbird.com/en/articles/963-how-do-i-integrate-with-zapier\n- https://support.tutorbird.com/en/articles/965-what-can-i-do-with-tutorbird-zapier\n- https://support.tutorbird.com/en/articles/1062-zapier-triggers\n- https://support.tutorbird.com/en/articles/1063-zapier-actions\n- https://zapier.com/apps/tutorbird/integrations\n\nNot affiliated with TutorBird.",
+    "description": "Unofficial Postman collection for the TutorBird integration API.\n\nTutorBird publishes API keys and a Zapier integration. It does not publish HTTP paths. Requests in **Students**, **Families**, **Calendar**, and **Payments** call `{{baseUrl}}` (default `https://api.tutorbird.com/v1`) using a community mapping of the documented operations. Treat a 404 as \"this path is not confirmed,\" not as a bug in your key.\n\nCreate a key in TutorBird under **Business Settings → Integrations → + Add API Key**. Choose **Read-Only** for the find requests, or **Read & Write** for Add Student, Update Student, and Add Payment. The key is shown once. Put it in the collection variable `apiKey` or in the TutorBird environment. This collection sends it as `Authorization: Bearer <apiKey>`.\n\n**Webhook samples** post example payloads to `{{webhookSinkUrl}}` so you can try a receiver. They are not sent to TutorBird. Email and SMS samples are empty objects because TutorBird has not published those fields.\n\nSources, retrieved 2026-10-03:\n\n- https://support.tutorbird.com/en/articles/963-how-do-i-integrate-with-zapier\n- https://support.tutorbird.com/en/articles/965-what-can-i-do-with-tutorbird-zapier\n- https://support.tutorbird.com/en/articles/1062-zapier-triggers\n- https://support.tutorbird.com/en/articles/1063-zapier-actions\n- https://zapier.com/apps/tutorbird/integrations\n\nNot affiliated with TutorBird.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
-    "type": "apikey",
-    "apikey": [
+    "type": "bearer",
+    "bearer": [
       {
-        "key": "key",
-        "value": "X-API-Key",
-        "type": "string"
-      },
-      {
-        "key": "value",
+        "key": "token",
         "value": "{{apiKey}}",
-        "type": "string"
-      },
-      {
-        "key": "in",
-        "value": "header",
         "type": "string"
       }
     ]

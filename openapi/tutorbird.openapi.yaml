@@ -47,8 +47,7 @@ info:
     TutorBird data, such as adding a student. A multi-tutor account requires the Administrator
     privilege to create a key.
 
-    TutorBird has not published the HTTP header that carries the key. This spec sends it as
-    `X-API-Key`. Confirm that header against a live key before depending on it.
+    Send the key on TutorBird requests as `Authorization: Bearer <apiKey>`.
 
     ## Identifier prefixes
 
@@ -74,7 +73,7 @@ servers:
       Zapier operations and are not confirmed by TutorBird.
 
 security:
-  - apiKey: []
+  - bearerAuth: []
 
 tags:
   - name: Students
@@ -648,13 +647,12 @@ webhooks:
 
 components:
   securitySchemes:
-    apiKey:
-      type: apiKey
-      in: header
-      name: X-API-Key
+    bearerAuth:
+      type: http
+      scheme: bearer
       description: |
         API key created under Business Settings → Integrations.
-        The header name is not published by TutorBird. This spec uses `X-API-Key`.
+        Send it as `Authorization: Bearer <apiKey>`.
 
   parameters:
     studentId:

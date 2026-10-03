@@ -8,7 +8,6 @@ info:
     url: https://opensource.org/licenses/MIT
   contact:
     name: Unofficial community specification
-    url: https://github.com/EZ-Walk/tutorbird-api
   description: |
     Unofficial OpenAPI description of the TutorBird integration surface.
 

@@ -1,0 +1,33 @@
+$kind: http-request
+description: |-
+  Creates a parent on an existing family. `FamilyID` must already exist. There is no `POST /families` (404). A new family is created only by `POST /students` with `Family` and `"Adult": {}`.
+
+  `FirstName` and `LastName` persist. Nested `Email` and `MobileTelephone` on this body do not. Set email afterward with `PUT /parents/{{parentId}}` and flat `EmailAddress`. Parent mobile did not persist via `MobileTelephone`, `TelephoneNumber`, `PhoneNumber`, `MobileTelephoneNumber`, or `MobilePhone`.
+
+  Requires a **Read & Write** key. Success is HTTP 200 and a JSON string of the new `prt_` id. Confirmed 2026-10-08.
+url: "{{baseUrl}}/parents"
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: application/json
+body:
+  type: json
+  content: |
+    {
+      "FamilyID": "{{familyId}}",
+      "FirstName": "Elise",
+      "LastName": "Chen"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Create returned 200', function () {
+        pm.response.to.have.status(200);
+      });
+      const body = pm.response.json();
+      pm.test('Create returned a parent id string', function () {
+        pm.expect(body).to.be.a('string').and.match(/^prt_/);
+      });
+      if (typeof body === 'string') pm.collectionVariables.set('parentId', body);
+    language: text/javascript
+order: 3000

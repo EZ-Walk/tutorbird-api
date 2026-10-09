@@ -1,0 +1,30 @@
+$kind: http-request
+description: |-
+  Partial update. `PUT` returns HTTP 200 and JSON `true`. `PATCH` returns 405.
+
+  Email persists only as flat `EmailAddress`. Nested `Email`, `email`, and `StudentEmail` do not stick. `Status` accepts Active, Inactive, Waiting, Lead, or Trial. There is no delete; `Inactive` retires a duplicate.
+
+  Requires a **Read & Write** key. Confirmed 2026-10-08.
+url: "{{baseUrl}}/students/{{studentId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+  Accept: application/json
+body:
+  type: json
+  content: |
+    {
+      "Status": "Inactive",
+      "EmailAddress": "maya.chen@example.com"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Update returned 200', function () {
+        pm.response.to.have.status(200);
+      });
+      pm.test('Update returned true', function () {
+        pm.expect(pm.response.json()).to.eql(true);
+      });
+    language: text/javascript
+order: 3000

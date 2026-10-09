@@ -1,0 +1,26 @@
+$kind: http-request
+description: |-
+  Sets the parent email as flat `EmailAddress`.
+
+  Mobile does not persist via `MobileTelephone`, `TelephoneNumber`, `PhoneNumber`, `MobileTelephoneNumber`, or `MobilePhone` (known gap). `IsPreferredInvoiceRecipient` did not persist on PUT.
+
+  Requires a **Read & Write** key. Confirmed 2026-10-08.
+url: "{{baseUrl}}/parents/{{parentId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+  Accept: application/json
+body:
+  type: json
+  content: |
+    {
+      "EmailAddress": "elise.chen@example.com"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Update returned 200', function () {
+        pm.response.to.have.status(200);
+      });
+    language: text/javascript
+order: 4000

@@ -1,0 +1,46 @@
+$kind: http-request
+description: |-
+  Creates a child on a new family.
+
+  Send `Family` (`FamilyName` is optional) and `"Adult": {}`. Omitting `Adult`, or sending a populated `Adult`, returns HTTP 400 `StudentInputItem.Adult: Must be null for new family`. To join an existing family instead, send `FamilyID` and omit `Family`.
+
+  `FirstName` and `LastName` are required (non-empty, max 60). `Status`, `Telephone`, `SkillLevel`, `LocalSchool`, and `Note` persist. Nested `Email` does not persist on create. There is no delete; retire a duplicate with `PUT` and `{"Status": "Inactive"}`.
+
+  Requires a **Read & Write** key. Success is HTTP 200 and a JSON string of the new `sdt_` id, not an object and not 201. Confirmed 2026-10-08.
+url: "{{baseUrl}}/students"
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: application/json
+body:
+  type: json
+  content: |
+    {
+      "FirstName": "Maya",
+      "LastName": "Chen",
+      "Status": "Trial",
+      "Family": {
+        "FamilyName": "Chen"
+      },
+      "Adult": {},
+      "Telephone": {
+        "TelephoneNumber": "+1-416-555-0148",
+        "TextingAllowed": true
+      },
+      "SkillLevel": "Grade 6",
+      "LocalSchool": "Harbour Elementary",
+      "Note": "Prefers afternoon lessons"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Create returned 200', function () {
+        pm.response.to.have.status(200);
+      });
+      const body = pm.response.json();
+      pm.test('Create returned a student id string', function () {
+        pm.expect(body).to.be.a('string').and.match(/^sdt_/);
+      });
+      if (typeof body === 'string') pm.collectionVariables.set('studentId', body);
+    language: text/javascript
+order: 1000

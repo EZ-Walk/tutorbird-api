@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TutorBird API
-  version: 0.1.0
+  version: 0.2.0
   summary: Unofficial specification of the TutorBird integration API.
   license:
     name: MIT
@@ -13,14 +13,19 @@ info:
 
     TutorBird lets an account owner create an API key under **Business Settings → Integrations**
     and connect that key to Zapier. The help center documents the triggers, actions, identifier
-    prefixes, and field formats. TutorBird does not publish HTTP paths, an error catalog, or an
-    OpenAPI document of its own. `https://api.tutorbird.com` answers as an API host, and `GET /v1`
-    is a real route (it returns an error page without credentials), but resource paths below are a
-    community mapping of the documented operations. Every operation is marked `x-path-status: inferred`.
+    prefixes, and field formats. TutorBird does not publish an OpenAPI document of its own.
 
-    Field names, enumerations, and identifier prefixes are taken from TutorBird's help center and
-    the public Zapier app listing. Where those two sources use different names for the same input,
-    the schema description records both.
+    Calls against `https://api.tutorbird.com` on 2026-10-08 confirmed the student, parent, and
+    family routes. Those operations are marked `x-path-status: confirmed`. Wire names on the
+    confirmed routes are PascalCase (`FirstName`, `FamilyID`, `ItemSubset`). Event, attendance,
+    payment, and webhook operations were not called and stay `x-path-status: inferred`.
+
+    `GET /v1` (the bare version root) can return HTTP 500 even when the resource routes succeed.
+    Do not use it as a health check.
+
+    Field names on inferred operations still follow TutorBird's help center and the public Zapier
+    app listing. Where those two sources use different names for the same input, the schema
+    description records both.
 
     This project is not affiliated with TutorBird. TutorBird is a trademark of its owner.
 
@@ -69,8 +74,9 @@ info:
 servers:
   - url: https://api.tutorbird.com/v1
     description: >
-      TutorBird API host. Paths on this server are a community mapping of documented
-      Zapier operations and are not confirmed by TutorBird.
+      TutorBird API host. Student, parent, and family paths were confirmed on 2026-10-08.
+      Event, attendance, and payment paths are still inferred. Do not send GET to this
+      server root as a health check; it can return HTTP 500 while resource routes work.
 
 security:
   - bearerAuth: []
@@ -79,7 +85,9 @@ tags:
   - name: Students
     description: Create, update, and find student profiles.
   - name: Families
-    description: Find parents on a family account.
+    description: >
+      Read families and parents, create a parent on an existing family, and update a parent.
+      There is no create-family route. A family is created only by adding a student.
   - name: Calendar
     description: Find events and attendance.
   - name: Payments
@@ -93,57 +101,75 @@ paths:
   /students:
     get:
       tags: [Students]
-      operationId: searchStudents
-      x-path-status: inferred
+      operationId: listStudents
+      x-path-status: confirmed
       x-zapier-key: search_student
       x-required-permission: read
-      summary: Find students by name or email
+      summary: List students
       description: |
-        Finds students from search text. Zapier field name is `SearchText`. The help center
-        says that text is a name or email. Use `GET /students/{studentId}` when you already
-        have an id.
+        Returns the full student list as `ItemSubset` plus `TotalItemCount`.
+
+        A search query string is ignored. The route does not filter by name or email.
+        Use `GET /students/{studentId}` when you already have an id.
       parameters:
         - name: search
           in: query
-          required: true
-          description: Name or email. Zapier field `SearchText`.
+          required: false
+          deprecated: true
+          description: Ignored. The route returns the full list.
           schema:
             type: string
       responses:
         "200":
-          description: Matching students. Find Student may return one record.
+          description: The full student list.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Student"
+                $ref: "#/components/schemas/StudentList"
               example:
-                - id: sdt_4f8a21
-                  active: true
-                  firstName: Maya
-                  lastName: Chen
-                  fullName: Maya Chen
-                  status: Trial
-                  email: maya.chen@example.com
-                  familyId: fml_91c0ab
+                ItemSubset:
+                  - FirstName: Maya
+                    LastName: Chen
+                    Status: Trial
+                    FamilyID: fml_91c0ab
+                    SkillLevel: Grade 6
+                    LocalSchool: Harbour Elementary
+                    Note: Prefers afternoon lessons
+                    Telephone:
+                      TelephoneNumber: "+1-416-555-0148"
+                      TextingAllowed: true
+                TotalItemCount: 1
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
       tags: [Students]
       operationId: addStudent
-      x-path-status: inferred
+      x-path-status: confirmed
       x-zapier-key: add_student
       x-required-permission: read-write
       summary: Add a student
       description: |
-        Adds a student to the TutorBird account.
+        Creates a student. There is no delete route. Retire a duplicate with
+        `PUT /students/{studentId}` and `{"Status": "Inactive"}`.
 
-        Required inputs published by Zapier are student type, first name, last name, and status.
-        The help center says a **Child** student also needs parent details. An **Adult** student
-        does not.
+        Required: `FirstName` and `LastName` (non-empty, max 60 characters), and exactly
+        one of `Family` or `FamilyID`.
 
-        On success, TutorBird returns a student id (`sdt_`) and a family id (`fml_`).
+        To join an existing family, send `FamilyID` (`fml_...`) and do not send `Family`.
+
+        To create a new family, send `Family` as an object (`FamilyName` is optional) and
+        send `"Adult": {}`. Omitting `Adult`, or sending a populated `Adult`, returns
+        HTTP 400 with `StudentInputItem.Adult: Must be null for new family`. The empty
+        object is what the server accepts for a child on a new family. `POST /families`
+        does not exist (HTTP 404). On create, `FamilyName` is combined with the names of
+        the people added.
+
+        Fields that persist on create: `Status` (`Active`, `Inactive`, `Waiting`, `Lead`,
+        `Trial`), `Telephone` as `{"TelephoneNumber": "...", "TextingAllowed": true}`,
+        `SkillLevel`, `LocalSchool`, and `Note`.
+
+        Nested `Email` (`{"EmailAddress": "..."}`) does not persist on create. Set email
+        afterward with `PUT` and a flat `EmailAddress`.
       requestBody:
         required: true
         content:
@@ -151,55 +177,52 @@ paths:
             schema:
               $ref: "#/components/schemas/AddStudentRequest"
             examples:
-              child:
-                summary: Child student with a parent
+              newFamily:
+                summary: Child on a new family
                 value:
-                  type: Child
-                  firstName: Maya
-                  lastName: Chen
-                  status: Trial
-                  email: maya.chen@example.com
-                  phoneNumber: "+1-416-555-0148"
-                  phoneSmsCapable: true
-                  sendEmailReminders: true
-                  sendSmsReminders: false
-                  birthday: "2014-05-02"
-                  studentSince: "2026-03-09"
-                  skillLevel: Grade 6
-                  subjects: Piano
-                  parent:
-                    firstName: Elise
-                    lastName: Chen
-                    email: elise.chen@example.com
-                    phoneNumber: "+1-416-555-0199"
-                    phoneSmsCapable: true
-                    sendEmailReminders: true
-                    sendSmsReminders: true
-                    address: 18 King St, Toronto
-              adult:
-                summary: Adult student
+                  FirstName: Maya
+                  LastName: Chen
+                  Status: Trial
+                  Family:
+                    FamilyName: Chen
+                  Adult: {}
+                  Telephone:
+                    TelephoneNumber: "+1-416-555-0148"
+                    TextingAllowed: true
+                  SkillLevel: Grade 6
+                  LocalSchool: Harbour Elementary
+                  Note: Prefers afternoon lessons
+              existingFamily:
+                summary: Join an existing family
                 value:
-                  type: Adult
-                  firstName: Jordan
-                  lastName: Hale
-                  status: Active
-                  email: jordan.hale@example.com
-                  phoneNumber: "+1-289-555-0114"
-                  phoneSmsCapable: true
-                  sendEmailReminders: true
-                  sendSmsReminders: false
-                  studentSince: "2026-03-09"
-                  subjects: Algebra
+                  FirstName: Maya
+                  LastName: Chen
+                  Status: Trial
+                  FamilyID: fml_91c0ab
+                  Telephone:
+                    TelephoneNumber: "+1-416-555-0148"
+                    TextingAllowed: true
+                  SkillLevel: Grade 6
+                  LocalSchool: Harbour Elementary
+                  Note: Prefers afternoon lessons
       responses:
-        "201":
-          description: Student created. TutorBird documents these two identifiers as the output.
+        "200":
+          description: |
+            JSON string of the new student id (`sdt_...`). Not an object, and not HTTP 201.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AddStudentResult"
-              example:
-                id: sdt_4f8a21
-                familyId: fml_91c0ab
+                $ref: "#/components/schemas/StudentId"
+              example: sdt_4f8a21
+        "400":
+          description: |
+            The body failed validation. Creating a family without `Adult`, or with a
+            populated `Adult`, includes the message
+            `StudentInputItem.Adult: Must be null for new family`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -211,69 +234,51 @@ paths:
     get:
       tags: [Students]
       operationId: findStudent
-      x-path-status: inferred
+      x-path-status: confirmed
       x-zapier-key: search_student
       x-required-permission: read
       summary: Find a student by id
       description: |
-        Finds one student by id. Zapier field name is `StudentID`. Search by name or email
-        with `GET /students?search=`.
+        Returns one student. The identifier uses the `sdt_` prefix.
+        `GET /students` does not filter, so this is the lookup when you already have an id.
       responses:
         "200":
-          description: Matching student. Group-tag rows are returned per tag.
+          description: The student.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Student"
               example:
-                id: sdt_4f8a21
-                active: true
-                firstName: Maya
-                lastName: Chen
-                fullName: Maya Chen
-                status: Trial
-                email: maya.chen@example.com
-                phoneNumber: "+1-416-555-0148"
-                phoneSmsCapable: true
-                sendEmailReminders: true
-                sendSmsReminders: false
-                birthday: "2014-05-02"
-                studentSince: "2026-03-09"
-                skillLevel: Grade 6
-                faceTimeId: maya.chen@example.com
-                familyId: fml_91c0ab
-                note: Prefers afternoon lessons
-                subjects: Piano
-                groups:
-                  - id: piano-tue
-                    note: Tuesday studio
-                    color: "#2F6FED"
-                accessStatus: Invited
-                lastLogin: "2026-03-01"
-                nextLesson: "2026-03-10 16:00:00"
-                timeZone: America/Toronto
+                FirstName: Maya
+                LastName: Chen
+                Status: Trial
+                FamilyID: fml_91c0ab
+                EmailAddress: maya.chen@example.com
+                SkillLevel: Grade 6
+                LocalSchool: Harbour Elementary
+                Note: Prefers afternoon lessons
+                Telephone:
+                  TelephoneNumber: "+1-416-555-0148"
+                  TextingAllowed: true
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
-    patch:
+    put:
       tags: [Students]
       operationId: updateStudent
-      x-path-status: inferred
+      x-path-status: confirmed
       x-zapier-key: update_student
       x-required-permission: read-write
       summary: Update a student
       description: |
-        Updates student fields. The help center says only fields that contain data are written;
-        leave a field out to keep the current value. Sending a value overwrites that field.
-        It does not append.
+        Partial body is accepted. Success is HTTP 200 and JSON `true`.
 
-        Article 965 also names an **Update Student Status** action. The current Zapier listing
-        and the detailed actions article expose status as a field on **Update Student**, which
-        is how this operation models it.
+        Email persists only as a flat property: `{"EmailAddress": "name@example.com"}`.
+        Nested `Email`, `email`, and `StudentEmail` do not stick.
 
-        The March 2026 product update removed Skype from student profiles and labels stored
-        values as deprecated. `skypeUsername` is included because the Zapier action still lists it.
+        Status updates with `{"Status": "Inactive"}` (also `Active`, `Waiting`, `Lead`,
+        or `Trial`). There is no delete; set `Inactive` to retire a duplicate.
       requestBody:
         required: true
         content:
@@ -281,18 +286,155 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateStudentRequest"
             example:
-              status: Active
-              email: maya.chen@example.com
-              sendEmailReminders: true
+              Status: Inactive
+              EmailAddress: maya.chen@example.com
       responses:
         "200":
-          description: TutorBird reports whether the update was applied.
+          description: JSON `true` when the update is applied.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UpdateStudentResult"
+                type: boolean
+              example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Students]
+      operationId: patchStudent
+      x-path-status: confirmed
+      x-zapier-key: update_student
+      x-required-permission: read-write
+      summary: Patch a student is not allowed
+      description: |
+        `PATCH` returns HTTP 405. Update with `PUT`.
+      responses:
+        "405":
+          description: Method not allowed. Use PUT.
+
+  /parents:
+    get:
+      tags: [Families]
+      operationId: listParents
+      x-path-status: confirmed
+      x-zapier-key: search_parents
+      x-required-permission: read
+      summary: List parents
+      description: |
+        Returns parents. Identifiers use the `prt_` prefix. The collection envelope was
+        not recorded on 2026-10-08 (student lists use `ItemSubset` and `TotalItemCount`).
+
+        Zapier documents family id, search text, and limit filters. Those query parameters
+        were not confirmed. Read one parent with `GET /parents/{parentId}`.
+      responses:
+        "200":
+          description: |
+            Parents for the account. Record fields that were confirmed are on `Parent`.
+            The list envelope itself was not recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnrecordedList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Families]
+      operationId: addParent
+      x-path-status: confirmed
+      x-required-permission: read-write
+      summary: Add a parent
+      description: |
+        Creates a parent on an existing family. `FamilyID` is required and must already
+        exist. There is no `POST /families` (HTTP 404). A new family is created only as a
+        side effect of `POST /students` with `Family` and `"Adult": {}`.
+
+        Success is HTTP 200 and a JSON string of the new `prt_` id.
+
+        `FirstName` and `LastName` persist. Nested `Email` and `MobileTelephone` on the
+        create body do not. Set email afterward with `PUT` and a flat `EmailAddress`.
+        Parent mobile did not persist through the update fields tried on 2026-10-08.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddParentRequest"
+            example:
+              FamilyID: fml_91c0ab
+              FirstName: Elise
+              LastName: Chen
+      responses:
+        "200":
+          description: JSON string of the new parent id (`prt_...`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParentId"
+              example: prt_10aa20
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /parents/{parentId}:
+    parameters:
+      - $ref: "#/components/parameters/parentId"
+    get:
+      tags: [Families]
+      operationId: findParent
+      x-path-status: confirmed
+      x-zapier-key: search_parent
+      x-required-permission: read
+      summary: Find a parent by id
+      description: Returns one parent. The identifier uses the `prt_` prefix.
+      responses:
+        "200":
+          description: The parent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Parent"
               example:
-                updated: true
+                FirstName: Elise
+                LastName: Chen
+                FamilyID: fml_91c0ab
+                EmailAddress: elise.chen@example.com
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Families]
+      operationId: updateParent
+      x-path-status: confirmed
+      x-required-permission: read-write
+      summary: Update a parent
+      description: |
+        Parent email persists as a flat property: `{"EmailAddress": "..."}`.
+
+        Parent mobile does not persist via `MobileTelephone`, `TelephoneNumber`,
+        `PhoneNumber`, `MobileTelephoneNumber`, or `MobilePhone`. That is a known gap.
+
+        `IsPreferredInvoiceRecipient` did not persist on PUT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateParentRequest"
+            example:
+              EmailAddress: elise.chen@example.com
+      responses:
+        "200":
+          description: The update was accepted.
+          content:
+            application/json:
+              schema:
+                description: Response body was not recorded beyond a successful PUT.
+                additionalProperties: true
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -300,72 +442,111 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /parents:
+  /families:
     get:
       tags: [Families]
-      operationId: findParents
-      x-path-status: inferred
-      x-zapier-key: search_parent
+      operationId: listFamilies
+      x-path-status: confirmed
       x-required-permission: read
-      summary: Find parents
+      summary: List families
       description: |
-        Finds parents by family id or by search text (name or email).
+        Returns families. Identifiers use the `fml_` prefix. The collection envelope was
+        not recorded on 2026-10-08 (student lists use `ItemSubset` and `TotalItemCount`).
 
-        Set `first` to `true` to match **Find Parent**, which returns the earliest parent added
-        to the family. Omit `first` or set it to `false` to match **Find All Parents**, which
-        returns every match. Zapier keys are `search_parent` and `search_parents`.
-
-        The help center says Find Parent accepts a family id, email, or name. The Zapier listing
-        names `FamilyID`, `SearchText`, and `limit`.
-      parameters:
-        - name: familyId
-          in: query
-          required: false
-          description: Family id (`fml_`). Zapier field `FamilyID`.
-          schema:
-            $ref: "#/components/schemas/FamilyId"
-        - $ref: "#/components/parameters/search"
-        - name: limit
-          in: query
-          required: false
-          description: Maximum number of parents to return. Published on Find Parent.
-          schema:
-            type: integer
-            minimum: 1
-        - name: first
-          in: query
-          required: false
-          description: When true, return only the first parent added to the family.
-          schema:
-            type: boolean
-            default: false
+        Nested `Students` and `Parents` arrays on the family payload come back empty.
+        Use the student and parent routes for those records.
       responses:
         "200":
-          description: Matching parents. Find Parent is the first item of this list.
+          description: |
+            Families for the account. Record fields that were confirmed are on `Family`.
+            The list envelope itself was not recorded.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Parent"
-              example:
-                - id: prt_10aa20
-                  familyId: fml_91c0ab
-                  firstName: Elise
-                  lastName: Chen
-                  fullName: Elise Chen
-                  email: elise.chen@example.com
-                  homePhone: "+1-416-555-0100"
-                  homePhoneSmsCapable: false
-                  workPhone: "+1-416-555-0160"
-                  workPhoneSmsCapable: false
-                  mobilePhone: "+1-416-555-0199"
-                  mobilePhoneSmsCapable: true
-                  address: 18 King St, Toronto
-                  sendEmailReminders: true
-                  sendSmsReminders: true
+                $ref: "#/components/schemas/UnrecordedList"
         "401":
           $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Families]
+      operationId: addFamily
+      x-path-status: confirmed
+      x-required-permission: read-write
+      summary: Create family is not a route
+      description: |
+        `POST /families` returns HTTP 404. Create a family by `POST /students` with
+        `Family` and `"Adult": {}`. Add further parents with `POST /parents` and that
+        family's `FamilyID`.
+      responses:
+        "404":
+          description: No create-family route.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /families/{familyId}:
+    parameters:
+      - $ref: "#/components/parameters/familyId"
+    get:
+      tags: [Families]
+      operationId: findFamily
+      x-path-status: confirmed
+      x-required-permission: read
+      summary: Find a family by id
+      description: |
+        Returns one family. The identifier uses the `fml_` prefix.
+
+        Nested `Students` and `Parents` arrays come back empty. Use
+        `GET /students/{studentId}` and `GET /parents/{parentId}` for those records.
+      responses:
+        "200":
+          description: The family.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Family"
+              example:
+                FamilyName: Chen
+                Students: []
+                Parents: []
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Families]
+      operationId: updateFamilyName
+      x-path-status: confirmed
+      x-required-permission: read-write
+      summary: Append to a family name
+      description: |
+        `{"FamilyName": "..."}` appends `"; "` and the submitted text to the current name.
+        It does not replace the name. On student create, `Family.FamilyName` is combined
+        with the names of the people added. Do not use this write as a safe rename.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFamilyRequest"
+            example:
+              FamilyName: Chen Studio
+      responses:
+        "200":
+          description: |
+            The write was accepted. The stored name is the previous name, then `"; "`,
+            then the submitted text.
+          content:
+            application/json:
+              schema:
+                description: Response body was not recorded beyond a successful PUT.
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /events/{eventId}:
     parameters:
@@ -662,6 +843,20 @@ components:
       description: Student id (`sdt_`).
       schema:
         $ref: "#/components/schemas/StudentId"
+    parentId:
+      name: parentId
+      in: path
+      required: true
+      description: Parent id (`prt_`).
+      schema:
+        $ref: "#/components/schemas/ParentId"
+    familyId:
+      name: familyId
+      in: path
+      required: true
+      description: Family id (`fml_`).
+      schema:
+        $ref: "#/components/schemas/FamilyId"
     eventId:
       name: eventId
       in: path
@@ -669,14 +864,6 @@ components:
       description: Event id (`evt_`).
       schema:
         $ref: "#/components/schemas/EventId"
-    search:
-      name: search
-      in: query
-      required: false
-      description: Name or email. Zapier field `SearchText`.
-      schema:
-        type: string
-
   responses:
     Unauthorized:
       description: |
@@ -772,11 +959,6 @@ components:
         Local date and time formatted `yyyy-mm-dd hh:mm:ss`. TutorBird does not document
         a numeric offset on these values. Find Student returns a separate time zone.
 
-    StudentType:
-      type: string
-      enum: [Child, Adult]
-      description: Published student types.
-
     StudentStatus:
       type: string
       enum: [Active, Inactive, Waiting, Lead, Trial]
@@ -794,257 +976,175 @@ components:
         The full list is not published.
       examples: [Unrecorded, Present, Absent]
 
-    ParentInput:
+    Telephone:
       type: object
-      description: Parent details required by the help center when the student type is Child.
-      required: [firstName, lastName]
+      description: Student telephone. Persists on create.
       properties:
-        firstName:
+        TelephoneNumber:
           type: string
-        lastName:
-          type: string
-        address:
-          type: string
-        email:
-          type: string
-          format: email
-        phoneNumber:
-          type: string
-        phoneSmsCapable:
+        TextingAllowed:
           type: boolean
-          description: Help center label "Parent Phone Number SMS Capable".
-        sendEmailReminders:
-          type: boolean
-        sendSmsReminders:
-          type: boolean
+
+    FamilyInput:
+      type: object
+      description: |
+        Sent as `Family` when creating a student and a new family together.
+        `FamilyName` is optional. On create it is combined with the names of the
+        people added. A later `PUT /families/{familyId}` appends to the stored name
+        with `"; "` and does not replace it.
+      properties:
+        FamilyName:
+          type: string
 
     AddStudentRequest:
       type: object
-      required: [type, firstName, lastName, status]
+      description: |
+        Wire body for `POST /students`. Send exactly one of `FamilyID` or `Family`.
+        When sending `Family`, also send `Adult` as an empty object.
+      required: [FirstName, LastName]
       properties:
-        type:
-          $ref: "#/components/schemas/StudentType"
-        firstName:
+        FirstName:
           type: string
-          description: Zapier field `studentFirstName`.
-        lastName:
+          minLength: 1
+          maxLength: 60
+        LastName:
           type: string
-          description: Zapier field `studentLastName`.
-        status:
+          minLength: 1
+          maxLength: 60
+        Status:
           $ref: "#/components/schemas/StudentStatus"
-        email:
-          type: string
-          format: email
-          description: Zapier field `studentEmail`.
-        phoneNumber:
-          type: string
-          description: Zapier field `studentPhoneNumber`.
-        phoneSmsCapable:
-          type: boolean
-          description: Zapier field `studentPhoneSMSCapable`.
-        sendEmailReminders:
-          type: boolean
-          description: Zapier field `studentSendEmailReminder`.
-        sendSmsReminders:
-          type: boolean
-          description: Zapier field `studentSendSMSReminder`.
-        birthday:
+        FamilyID:
           allOf:
-            - $ref: "#/components/schemas/DateOnly"
-          description: Zapier field `studentBirthday`.
-        studentSince:
-          allOf:
-            - $ref: "#/components/schemas/DateOnly"
-          description: Zapier field `studentSince`.
-        skillLevel:
-          type: string
-          description: Zapier field `studentSkillLevel`. Free text.
-        gender:
-          type: string
-          description: Zapier field `studentGender`. Free text. The allowed values are not published.
-        referrer:
-          type: string
-          description: Zapier field `studentReferrer`.
-        note:
-          type: string
-          description: Zapier field `studentNote`.
-        skypeUsername:
-          type: string
-          deprecated: true
+            - $ref: "#/components/schemas/FamilyId"
+          description: Join this existing family. Do not also send `Family`.
+        Family:
+          $ref: "#/components/schemas/FamilyInput"
+        Adult:
+          type: object
+          maxProperties: 0
           description: |
-            Zapier field `studentSkypeUsername`. TutorBird removed the Skype profile field in
-            March 2026 and labels stored content as deprecated.
-        school:
+            Required as `{}` when `Family` creates a new family. A missing or
+            populated object returns HTTP 400
+            `StudentInputItem.Adult: Must be null for new family`.
+        Telephone:
+          $ref: "#/components/schemas/Telephone"
+        SkillLevel:
           type: string
-          description: Zapier field `studentSchool`.
-        faceTimeId:
+        LocalSchool:
           type: string
-          description: Zapier field `studentFaceTimeID`.
-        groupTags:
+        Note:
           type: string
-          description: Zapier field `studentGroupTags`. Published as text.
-        subjects:
-          type: string
-          description: Zapier field `studentSubjectTypes`. Published as text.
-        parent:
-          $ref: "#/components/schemas/ParentInput"
-
-    AddStudentResult:
-      type: object
-      required: [id, familyId]
-      properties:
-        id:
-          $ref: "#/components/schemas/StudentId"
-        familyId:
-          $ref: "#/components/schemas/FamilyId"
 
     UpdateStudentRequest:
       type: object
       description: |
-        All properties are optional. Omit a property to leave the stored value unchanged.
-        Zapier uses PascalCase names on this action (`FirstName`, `StudentID`, and so on).
+        Partial body for `PUT /students/{studentId}`. Confirmed properties are
+        `EmailAddress` and `Status`. Nested `Email`, `email`, and `StudentEmail`
+        do not persist.
       properties:
-        status:
-          $ref: "#/components/schemas/StudentStatus"
-        firstName:
-          type: string
-        lastName:
-          type: string
-        email:
+        EmailAddress:
           type: string
           format: email
-        phoneNumber:
-          type: string
-        phoneSmsCapable:
-          type: boolean
-          description: Zapier field `PhoneSMSCapable`.
-        sendEmailReminders:
-          type: boolean
-        sendSmsReminders:
-          type: boolean
-        birthday:
-          $ref: "#/components/schemas/DateOnly"
-        studentSince:
-          $ref: "#/components/schemas/DateOnly"
-        skillLevel:
-          type: string
-        gender:
-          type: string
-        referrer:
-          type: string
-        note:
-          type: string
-        skypeUsername:
-          type: string
-          deprecated: true
-        school:
-          type: string
-        faceTimeId:
-          type: string
-        subjects:
-          type: string
-          description: Zapier field `SubjectTypes`.
-        groupTagIds:
-          type: string
-          description: |
-            Zapier field `GroupTagsIDs`. The help center describes group tags as a static
-            dropdown or the value "Custom".
-        address:
-          type: string
-          description: Help center field "Adult Student Address". Zapier field `AdultStudentAddress`.
-        preferredInvoiceRecipient:
-          type: boolean
-          description: Help center field for adult students. Not listed on the Zapier key list.
-        includeInContactList:
-          type: boolean
-          description: Help center field for adult students. Not listed on the Zapier key list.
-        homePhone:
-          type: string
-          description: Help center field for adult students.
-        homePhoneSmsCapable:
-          type: boolean
-        workPhone:
-          type: string
-        workPhoneSmsCapable:
-          type: boolean
+        Status:
+          $ref: "#/components/schemas/StudentStatus"
 
-    UpdateStudentResult:
+    AddParentRequest:
       type: object
-      required: [updated]
+      required: [FamilyID, FirstName, LastName]
+      description: |
+        `FamilyID` must already exist. Nested `Email` and `MobileTelephone` do not
+        persist on create.
       properties:
-        updated:
-          type: boolean
-          description: Help center output "Updated".
+        FamilyID:
+          $ref: "#/components/schemas/FamilyId"
+        FirstName:
+          type: string
+          minLength: 1
+          maxLength: 60
+        LastName:
+          type: string
+          minLength: 1
+          maxLength: 60
 
-    StudentGroup:
+    UpdateParentRequest:
       type: object
-      description: One group tag. Find Student returns these fields once per tag.
+      description: |
+        Flat `EmailAddress` persists. Mobile does not persist via `MobileTelephone`,
+        `TelephoneNumber`, `PhoneNumber`, `MobileTelephoneNumber`, or `MobilePhone`.
+        `IsPreferredInvoiceRecipient` did not persist on PUT.
       properties:
-        id:
+        EmailAddress:
           type: string
-          description: Help center field "Student Group ID".
-        note:
+          format: email
+
+    UpdateFamilyRequest:
+      type: object
+      required: [FamilyName]
+      description: |
+        Appends `"; "` and `FamilyName` to the current family name. This is not a replace.
+      properties:
+        FamilyName:
           type: string
-        color:
+          minLength: 1
+
+    StudentList:
+      type: object
+      required: [ItemSubset, TotalItemCount]
+      properties:
+        ItemSubset:
+          type: array
+          items:
+            $ref: "#/components/schemas/Student"
+        TotalItemCount:
+          type: integer
+          minimum: 0
+
+    Family:
+      type: object
+      additionalProperties: true
+      description: |
+        One family (`fml_`). `Students` and `Parents` come back empty; read those
+        records from their own routes.
+      properties:
+        FamilyName:
           type: string
+        Students:
+          type: array
+          items: {}
+          description: Empty on this payload.
+        Parents:
+          type: array
+          items: {}
+          description: Empty on this payload.
 
     Student:
       type: object
-      description: Student returned by Find Student.
+      additionalProperties: true
+      description: |
+        One student from `GET /students` or `GET /students/{studentId}`.
+        The identifier uses the `sdt_` prefix. Confirmed wire names are PascalCase.
+        `EmailAddress` persists on PUT, not from nested `Email` on create.
       properties:
-        id:
-          $ref: "#/components/schemas/StudentId"
-        active:
-          type: boolean
-        birthday:
-          $ref: "#/components/schemas/DateOnly"
-        studentSince:
-          $ref: "#/components/schemas/DateOnly"
-        email:
+        FirstName:
           type: string
-        faceTimeId:
+          maxLength: 60
+        LastName:
           type: string
-        familyId:
-          $ref: "#/components/schemas/FamilyId"
-        firstName:
-          type: string
-        fullName:
-          type: string
-        lastName:
-          type: string
-        gender:
-          type: string
-        note:
-          type: string
-        sendEmailReminders:
-          type: boolean
-          description: Help center field "Email Reminders Enabled".
-        sendSmsReminders:
-          type: boolean
-          description: Help center field "SMS reminders Enabled".
-        skillLevel:
-          type: string
-        status:
+          maxLength: 60
+        Status:
           $ref: "#/components/schemas/StudentStatus"
-        subjects:
+        FamilyID:
+          $ref: "#/components/schemas/FamilyId"
+        EmailAddress:
           type: string
-          description: Present on the New Student trigger. Named "Student Groups (Group Tags)" separately on Find Student.
-        groups:
-          type: array
-          items:
-            $ref: "#/components/schemas/StudentGroup"
-        phoneNumber:
+          format: email
+        Telephone:
+          $ref: "#/components/schemas/Telephone"
+        SkillLevel:
           type: string
-        phoneSmsCapable:
-          type: boolean
-          description: Help center field "SMS Enabled" on Find Student, and "Texting Allowed" on the triggers.
-        accessStatus:
+        LocalSchool:
           type: string
-        lastLogin:
-          $ref: "#/components/schemas/DateOnly"
-        nextLesson:
-          $ref: "#/components/schemas/DateTimeLocal"
-        timeZone:
+        Note:
           type: string
 
     StudentEvent:
@@ -1101,41 +1201,21 @@ components:
 
     Parent:
       type: object
+      additionalProperties: true
       description: |
-        One parent from Find Parent or Find All Parents. The help center table labels the work
-        telephone row as True/False; the surrounding rows show a telephone number plus a
-        texting flag, and this schema follows that pattern.
+        One parent (`prt_`). Confirmed on the HTTP API: `FirstName` and `LastName`
+        persist on create, and flat `EmailAddress` persists on PUT. Mobile fields
+        and `IsPreferredInvoiceRecipient` did not persist in the 2026-10-08 checks.
       properties:
-        id:
-          $ref: "#/components/schemas/ParentId"
-        familyId:
+        FirstName:
+          type: string
+        LastName:
+          type: string
+        FamilyID:
           $ref: "#/components/schemas/FamilyId"
-        firstName:
+        EmailAddress:
           type: string
-        lastName:
-          type: string
-        fullName:
-          type: string
-        email:
-          type: string
-        homePhone:
-          type: string
-        homePhoneSmsCapable:
-          type: boolean
-        workPhone:
-          type: string
-        workPhoneSmsCapable:
-          type: boolean
-        mobilePhone:
-          type: string
-        mobilePhoneSmsCapable:
-          type: boolean
-        address:
-          type: string
-        sendEmailReminders:
-          type: boolean
-        sendSmsReminders:
-          type: boolean
+          format: email
 
     Attendee:
       type: object
@@ -1318,6 +1398,12 @@ components:
           description: Payment method text. The allowed values are not published.
         familyId:
           $ref: "#/components/schemas/FamilyId"
+
+    UnrecordedList:
+      description: |
+        A list route that succeeded on 2026-10-08 whose JSON envelope was not recorded.
+        Student lists are the exception: they use `ItemSubset` and `TotalItemCount`.
+      additionalProperties: true
 
     UnpublishedEvent:
       type: object

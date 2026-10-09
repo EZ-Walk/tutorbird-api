@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "TutorBird API",
-    "description": "Unofficial Postman collection for the TutorBird integration API.\n\nTutorBird publishes API keys and a Zapier integration. It does not publish HTTP paths. Requests in **Students**, **Families**, **Calendar**, and **Payments** call `{{baseUrl}}` (default `https://api.tutorbird.com/v1`) using a community mapping of the documented operations. Treat a 404 as \"this path is not confirmed,\" not as a bug in your key.\n\nCreate a key in TutorBird under **Business Settings → Integrations → + Add API Key**. Choose **Read-Only** for the find requests, or **Read & Write** for Add Student, Update Student, and Add Payment. The key is shown once. Put it in the collection variable `apiKey` or in the TutorBird environment. This collection sends it as `Authorization: Bearer <apiKey>`.\n\n**Webhook samples** post example payloads to `{{webhookSinkUrl}}` so you can try a receiver. They are not sent to TutorBird. Email and SMS samples are empty objects because TutorBird has not published those fields.\n\nSources, retrieved 2026-10-03:\n\n- https://support.tutorbird.com/en/articles/963-how-do-i-integrate-with-zapier\n- https://support.tutorbird.com/en/articles/965-what-can-i-do-with-tutorbird-zapier\n- https://support.tutorbird.com/en/articles/1062-zapier-triggers\n- https://support.tutorbird.com/en/articles/1063-zapier-actions\n- https://zapier.com/apps/tutorbird/integrations\n\nNot affiliated with TutorBird.",
+    "description": "Unofficial Postman collection for the TutorBird integration API.\n\nTutorBird publishes API keys and a Zapier integration. It does not publish HTTP paths. Requests in **Students**, **Families**, **Calendar**, and **Payments** call `{{baseUrl}}` (default `https://api.tutorbird.com/v1`) using a community mapping of the documented operations. Student, parent, and family routes were confirmed on 2026-10-08 and use PascalCase wire names. Do not use GET /v1 as a health check; it can return HTTP 500 while those routes work. Calendar, payment, and webhook requests are still inferred. Treat a 404 on an inferred path as \"this path is not confirmed,\" not as a bug in your key.\n\nCreate a key in TutorBird under **Business Settings \u2192 Integrations \u2192 + Add API Key**. Choose **Read-Only** for the find requests, or **Read & Write** for Add Student, Update Student, and Add Payment. The key is shown once. Put it in the collection variable `apiKey` or in the TutorBird environment. This collection sends it as `Authorization: Bearer <apiKey>`.\n\n**Webhook samples** post example payloads to `{{webhookSinkUrl}}` so you can try a receiver. They are not sent to TutorBird. Email and SMS samples are empty objects because TutorBird has not published those fields.\n\nSources, retrieved 2026-10-03:\n\n- https://support.tutorbird.com/en/articles/963-how-do-i-integrate-with-zapier\n- https://support.tutorbird.com/en/articles/965-what-can-i-do-with-tutorbird-zapier\n- https://support.tutorbird.com/en/articles/1062-zapier-triggers\n- https://support.tutorbird.com/en/articles/1063-zapier-actions\n- https://zapier.com/apps/tutorbird/integrations\n\nNot affiliated with TutorBird.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -38,6 +38,10 @@
     {
       "key": "webhookSinkUrl",
       "value": "https://httpbin.org/post"
+    },
+    {
+      "key": "parentId",
+      "value": "prt_10aa20"
     }
   ],
   "item": [
@@ -61,7 +65,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"Child\",\n  \"firstName\": \"Maya\",\n  \"lastName\": \"Chen\",\n  \"status\": \"Trial\",\n  \"email\": \"maya.chen@example.com\",\n  \"phoneNumber\": \"+1-416-555-0148\",\n  \"phoneSmsCapable\": true,\n  \"sendEmailReminders\": true,\n  \"sendSmsReminders\": false,\n  \"birthday\": \"2014-05-02\",\n  \"studentSince\": \"2026-03-09\",\n  \"skillLevel\": \"Grade 6\",\n  \"subjects\": \"Piano\",\n  \"parent\": {\n    \"firstName\": \"Elise\",\n    \"lastName\": \"Chen\",\n    \"email\": \"elise.chen@example.com\",\n    \"phoneNumber\": \"+1-416-555-0199\",\n    \"phoneSmsCapable\": true,\n    \"sendEmailReminders\": true,\n    \"sendSmsReminders\": true,\n    \"address\": \"18 King St, Toronto\"\n  }\n}\n",
+              "raw": "{\n  \"FirstName\": \"Maya\",\n  \"LastName\": \"Chen\",\n  \"Status\": \"Trial\",\n  \"Family\": {\n    \"FamilyName\": \"Chen\"\n  },\n  \"Adult\": {},\n  \"Telephone\": {\n    \"TelephoneNumber\": \"+1-416-555-0148\",\n    \"TextingAllowed\": true\n  },\n  \"SkillLevel\": \"Grade 6\",\n  \"LocalSchool\": \"Harbour Elementary\",\n  \"Note\": \"Prefers afternoon lessons\"\n}\n",
               "options": {
                 "raw": {
                   "language": "json"
@@ -69,7 +73,7 @@
               }
             },
             "url": "{{baseUrl}}/students",
-            "description": "Adds a child student and the parent details the help center requires for that type.\n\nRequires a **Read & Write** key. Documented success fields are a student id (`sdt_`) and a family id (`fml_`). The path `POST /students` is inferred."
+            "description": "Creates a child on a new family.\n\nSend `Family` (`FamilyName` is optional) and `\"Adult\": {}`. Omitting `Adult`, or sending a populated `Adult`, returns HTTP 400 `StudentInputItem.Adult: Must be null for new family`. To join an existing family instead, send `FamilyID` and omit `Family`.\n\n`FirstName` and `LastName` are required (non-empty, max 60). `Status`, `Telephone`, `SkillLevel`, `LocalSchool`, and `Note` persist. Nested `Email` does not persist on create. There is no delete; retire a duplicate with PUT and `{\"Status\": \"Inactive\"}`.\n\nRequires a **Read & Write** key. Success is HTTP 200 and a JSON string of the new `sdt_` id, not an object and not 201. Confirmed 2026-10-08."
           },
           "event": [
             {
@@ -77,12 +81,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Create returned 201', function () {",
-                  "  pm.response.to.have.status(201);",
+                  "pm.test('Create returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
                   "});",
                   "const body = pm.response.json();",
-                  "if (body && body.id) pm.collectionVariables.set('studentId', body.id);",
-                  "if (body && body.familyId) pm.collectionVariables.set('familyId', body.familyId);"
+                  "pm.test('Create returned a student id string', function () {",
+                  "  pm.expect(body).to.be.a('string').and.match(/^sdt_/);",
+                  "});",
+                  "if (typeof body === 'string') pm.collectionVariables.set('studentId', body);"
                 ]
               }
             }
@@ -104,7 +110,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"Adult\",\n  \"firstName\": \"Jordan\",\n  \"lastName\": \"Hale\",\n  \"status\": \"Active\",\n  \"email\": \"jordan.hale@example.com\",\n  \"phoneNumber\": \"+1-289-555-0114\",\n  \"phoneSmsCapable\": true,\n  \"sendEmailReminders\": true,\n  \"sendSmsReminders\": false,\n  \"studentSince\": \"2026-03-09\",\n  \"subjects\": \"Algebra\",\n  \"address\": \"42 Queen St, Hamilton\"\n}\n",
+              "raw": "{\n  \"FirstName\": \"Jordan\",\n  \"LastName\": \"Hale\",\n  \"Status\": \"Active\",\n  \"Family\": {\n    \"FamilyName\": \"Hale\"\n  },\n  \"Adult\": {},\n  \"Telephone\": {\n    \"TelephoneNumber\": \"+1-289-555-0114\",\n    \"TextingAllowed\": true\n  },\n  \"SkillLevel\": \"Algebra\",\n  \"Note\": \"Evening lessons\"\n}\n",
               "options": {
                 "raw": {
                   "language": "json"
@@ -112,7 +118,7 @@
               }
             },
             "url": "{{baseUrl}}/students",
-            "description": "Adds an adult student. Parent details are not required for this type. Requires a **Read & Write** key. Path is inferred."
+            "description": "Creates a student on a new family with the confirmed body: `Family` plus `\"Adult\": {}`.\n\nA separate adult-student type was not confirmed on this route. A populated `Adult` object returns HTTP 400 `StudentInputItem.Adult: Must be null for new family`. Nested `Email` does not persist on create.\n\nRequires a **Read & Write** key. Success is HTTP 200 and a JSON string of the new `sdt_` id. Confirmed 2026-10-08."
           },
           "event": [
             {
@@ -120,9 +126,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Create returned 201', function () {",
-                  "  pm.response.to.have.status(201);",
-                  "});"
+                  "pm.test('Create returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('Create returned a student id string', function () {",
+                  "  pm.expect(body).to.be.a('string').and.match(/^sdt_/);",
+                  "});",
+                  "if (typeof body === 'string') pm.collectionVariables.set('studentId', body);"
                 ]
               }
             }
@@ -131,7 +142,7 @@
         {
           "name": "Update student",
           "request": {
-            "method": "PATCH",
+            "method": "PUT",
             "header": [
               {
                 "key": "Content-Type",
@@ -144,7 +155,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"Active\",\n  \"email\": \"maya.chen@example.com\",\n  \"sendEmailReminders\": true\n}\n",
+              "raw": "{\n  \"Status\": \"Inactive\",\n  \"EmailAddress\": \"maya.chen@example.com\"\n}\n",
               "options": {
                 "raw": {
                   "language": "json"
@@ -152,7 +163,7 @@
               }
             },
             "url": "{{baseUrl}}/students/{{studentId}}",
-            "description": "Updates only the fields present in the body. Blank fields are omitted so TutorBird does not overwrite them. Status values are Active, Inactive, Waiting, Lead, and Trial. Article 965's Update Student Status action is this same write, limited to `status`.\n\nRequires a **Read & Write** key. Documented output is `{ \"updated\": true }`. Path is inferred."
+            "description": "Partial update. `PUT` returns HTTP 200 and JSON `true`. `PATCH` returns 405.\n\nEmail persists only as flat `EmailAddress`. Nested `Email`, `email`, and `StudentEmail` do not stick. `Status` accepts Active, Inactive, Waiting, Lead, or Trial. There is no delete; `Inactive` retires a duplicate.\n\nRequires a **Read & Write** key. Confirmed 2026-10-08."
           },
           "event": [
             {
@@ -162,6 +173,9 @@
                 "exec": [
                   "pm.test('Update returned 200', function () {",
                   "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Update returned true', function () {",
+                  "  pm.expect(pm.response.json()).to.eql(true);",
                   "});"
                 ]
               }
@@ -179,7 +193,7 @@
               }
             ],
             "url": "{{baseUrl}}/students/{{studentId}}",
-            "description": "Find Student with Zapier field `StudentID`. A read-only key is enough. Path is inferred."
+            "description": "Returns one student (`sdt_`). A read-only key is enough. Confirmed 2026-10-08."
           },
           "event": [
             {
@@ -205,8 +219,8 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/students?search=maya.chen@example.com",
-            "description": "Find Student with Zapier field `SearchText`. The help center says this is a name or email. Path is inferred."
+            "url": "{{baseUrl}}/students",
+            "description": "Lists every student. A search query string is ignored; `GET /students` returns `ItemSubset` and `TotalItemCount` for the full account. Confirmed 2026-10-08. Use Find student by id when you already have an `sdt_` id."
           },
           "event": [
             {
@@ -275,6 +289,91 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Find returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add parent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"FamilyID\": \"{{familyId}}\",\n  \"FirstName\": \"Elise\",\n  \"LastName\": \"Chen\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/parents",
+            "description": "Creates a parent on an existing family. `FamilyID` must already exist. There is no `POST /families` (404). A new family is created only by `POST /students` with `Family` and `\"Adult\": {}`.\n\n`FirstName` and `LastName` persist. Nested `Email` and `MobileTelephone` on this body do not. Set email afterward with `PUT /parents/{{parentId}}` and flat `EmailAddress`. Parent mobile did not persist via `MobileTelephone`, `TelephoneNumber`, `PhoneNumber`, `MobileTelephoneNumber`, or `MobilePhone`.\n\nRequires a **Read & Write** key. Success is HTTP 200 and a JSON string of the new `prt_` id. Confirmed 2026-10-08."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create returned 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test('Create returned a parent id string', function () {",
+                  "  pm.expect(body).to.be.a('string').and.match(/^prt_/);",
+                  "});",
+                  "if (typeof body === 'string') pm.collectionVariables.set('parentId', body);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update parent",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"EmailAddress\": \"elise.chen@example.com\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/parents/{{parentId}}",
+            "description": "Sets the parent email as flat `EmailAddress`.\n\nMobile does not persist via `MobileTelephone`, `TelephoneNumber`, `PhoneNumber`, `MobileTelephoneNumber`, or `MobilePhone` (known gap). `IsPreferredInvoiceRecipient` did not persist on PUT.\n\nRequires a **Read & Write** key. Confirmed 2026-10-08."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Update returned 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});"
                 ]

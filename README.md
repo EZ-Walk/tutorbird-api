@@ -49,6 +49,10 @@ Returns **HTTP 200** with a bare JSON string ID such as `"rcv_..."`, not a 201 o
 - Nested family members (`Students`, `Parents`) come back empty.
 - `OPTIONS` returns 200 for every path, so it proves nothing about a route.
 
+### Bulk balance reset
+
+To zero a family's balance, take the AccountBalance of that family's latest transaction (negative = owes) and POST a Payment to /v1/transactions for -AccountBalance. Writes are permanent with no delete or dry run, so build a dry-run list first and test on your own family. Results: pending (not yet run at scale).
+
 ### Better path coming
 
 TutorBird via Zapier MCP: https://zapier.com/mcp/tutorbird

@@ -1,4 +1,61 @@
-# TutorBird API
+# TutorBird API (unofficial)
+
+> **Disclaimer:** This is an unofficial, reverse-engineered description of the TutorBird HTTP API. It is not affiliated with, endorsed by, or supported by TutorBird. Use it only on your own account, at your own risk. Writes are permanent: there is no delete and no dry-run mode.
+
+TutorBird publishes no official OpenAPI document. The surface is Zapier-shaped: TutorBird exposes API keys for its Zapier app, and the paths below were confirmed by calling the API directly.
+
+## Quick reference
+
+- **Base URL:** `https://api.tutorbird.com/v1`
+- **Auth:** `Authorization: Bearer <key>` (key from Business Settings → Integrations; writes need a Read & Write key)
+- **Lists** return `{"ItemSubset": [...], "TotalItemCount": n}` with every record at once. `skip`/`take` are ignored, so do **not** paginate in a loop (it repeats forever).
+
+### Confirmed reads
+
+`GET /parents`, `GET /students`, `GET /families`, `GET /invoices`, `GET /transactions` (plus `/{id}` for parents, students, families).
+
+### Confirmed write: add a payment
+
+`POST /v1/transactions`
+
+```json
+{
+  "TransactionType": "Payment",
+  "FamilyID": "fml_XXXX",
+  "StudentID": "sdt_XXXX",
+  "Amount": 0.01,
+  "Description": "...",
+  "PaymentMethod": "Venmo",
+  "Timestamp": "YYYY-MM-DD",
+  "InvoiceIDsToBeMarkedPaid": []
+}
+```
+
+Returns **HTTP 200** with a bare JSON string ID such as `"rcv_..."`, not a 201 object. Validated on 2026-10-29 with an API key and a read-back of `/transactions` (type, family, student, amount, and running balance all matched).
+
+### Known quirks
+
+- `POST /payments` (listed in older specs and inferred from Zapier) returns **404**. It is marked `x-path-status: wrong` in the spec. Use `POST /transactions`.
+- An empty-body `POST /transactions` returns **500**, not a validation error.
+- `PaymentMethod` is silently dropped (reads back null).
+- `AccountBalance` on each transaction is the real running balance; **negative means the family owes**. `family.Balance` reads 0.
+- No dry-run mode.
+- No delete. Set records `Status: Inactive` instead.
+- Student search query params are ignored; the full list comes back.
+- `GET /v1` returns 500. It is not a health check.
+- Email does not stick on create (set flat `EmailAddress` with a PUT).
+- Parent mobile does not persist.
+- Family rename (`PUT FamilyName`) appends instead of replacing.
+- Nested family members (`Students`, `Parents`) come back empty.
+- `OPTIONS` returns 200 for every path, so it proves nothing about a route.
+
+### Better path coming
+
+TutorBird via Zapier MCP: https://zapier.com/mcp/tutorbird
+
+---
+
+## Detailed notes
 
 Unofficial OpenAPI specification and Postman collection for the [TutorBird](https://www.tutorbird.com/) integration API.
 

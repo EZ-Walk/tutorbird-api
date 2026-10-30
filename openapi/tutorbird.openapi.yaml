@@ -657,7 +657,7 @@ paths:
     post:
       tags: [Payments]
       operationId: addPayment
-      x-path-status: inferred
+      x-path-status: wrong  # POST /v1/payments returns 404; real write is POST /v1/transactions (see README)
       x-zapier-key: add_payment
       x-required-permission: read-write
       summary: Add a payment

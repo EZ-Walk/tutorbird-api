@@ -20,6 +20,12 @@ info:
     confirmed routes are PascalCase (`FirstName`, `FamilyID`, `ItemSubset`). Event, attendance,
     payment, and webhook operations were not called and stay `x-path-status: inferred`.
 
+    Payments (confirmed 2026-10-29): the real write is `POST /v1/transactions` with a PascalCase
+    body (`TransactionType: Payment`, `FamilyID`, `StudentID`, `Amount`, ...). It returns HTTP 200
+    with a bare `rcv_` ID string. A bulk balance reset posted 65 payments this way; a read-back of
+    `GET /v1/transactions` confirmed every paid family's running AccountBalance at 0. An empty
+    `StudentID` returns 400 UnparseableID. `PaymentMethod` is not persisted.
+
     `GET /v1` (the bare version root) can return HTTP 500 even when the resource routes succeed.
     Do not use it as a health check.
 

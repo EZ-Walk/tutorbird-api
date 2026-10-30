@@ -51,7 +51,9 @@ Returns **HTTP 200** with a bare JSON string ID such as `"rcv_..."`, not a 201 o
 
 ### Bulk balance reset
 
-To zero a family's balance, take the AccountBalance of that family's latest transaction (negative = owes) and POST a Payment to /v1/transactions for -AccountBalance. Writes are permanent with no delete or dry run, so build a dry-run list first and test on your own family. Results: pending (not yet run at scale).
+To zero a family's balance, take the AccountBalance of that family's latest transaction (negative = owes) and POST a Payment to /v1/transactions for -AccountBalance. Writes are permanent with no delete or dry run, so build a dry-run list first and test on your own family. 
+
+Results (2026-10-29, run once at the account owner's request): 66 families had a negative latest balance. 65 were paid one at a time, 1.5 s apart; every call returned HTTP 200 with a bare `rcv_` ID. A fresh `GET /v1/transactions` read-back showed each paid family's latest AccountBalance at exactly 0. One failed: a family with no student on record got `400 UnparseableID` (an empty `StudentID` is rejected, so treat StudentID as required). Quirks seen: `PaymentMethod` is still dropped on read-back, and the family `Balance` field stays 0 regardless, so use the transaction running balance.
 
 ### Better path coming
 

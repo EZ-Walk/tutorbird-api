@@ -55,9 +55,97 @@ To zero a family's balance, take the AccountBalance of that family's latest tran
 
 Results (2026-10-29, run once at the account owner's request): 66 families had a negative latest balance. 65 were paid one at a time, 1.5 s apart; every call returned HTTP 200 with a bare `rcv_` ID. A fresh `GET /v1/transactions` read-back showed each paid family's latest AccountBalance at exactly 0. One failed: a family with no student on record got `400 UnparseableID` (an empty `StudentID` is rejected, so treat StudentID as required). Quirks seen: `PaymentMethod` is still dropped on read-back, and the family `Balance` field stays 0 regardless, so use the transaction running balance.
 
-### Better path coming
+## Connecting an MCP client
 
-TutorBird via Zapier MCP: https://zapier.com/mcp/tutorbird
+Claude Desktop and similar clients cannot call this REST API directly. They need an MCP server that exposes calls as tools. This repo ships a thin Streamable HTTP proxy at `/mcp`. It forwards to `https://api.tutorbird.com`, stores no API key, and passes the caller's `Authorization` header through.
+
+**Server URL:** `https://tutorbird-api.vercel.app/mcp`
+
+That host is the Vercel project `tutorbird-api`. Leave Vercel Authentication off for this project, or MCP clients cannot connect. TutorBird auth is the bearer token on `/mcp`. Locally, `npm run dev` serves `http://localhost:3000/mcp`. `npm test` mocks TutorBird and does not call it.
+
+### Client config
+
+Use one `mcpServers` entry in Claude Desktop (`claude_desktop_config.json`) or in `mcp.json`. Keep the key in that local file or in `TUTORBIRD_API_KEY`. Do not commit it.
+
+```json
+{
+  "mcpServers": {
+    "tutorbird": {
+      "url": "https://tutorbird-api.vercel.app/mcp",
+      "headers": {
+        "Authorization": "Bearer <TUTORBIRD_API_KEY>"
+      }
+    }
+  }
+}
+```
+
+Clients that cannot send headers on a remote server can use `mcp-remote`:
+
+```json
+{
+  "mcpServers": {
+    "tutorbird": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://tutorbird-api.vercel.app/mcp",
+        "--header",
+        "Authorization: Bearer <TUTORBIRD_API_KEY>"
+      ]
+    }
+  }
+}
+```
+
+Zapier MCP is the other hosted path: https://zapier.com/mcp/tutorbird. TutorBird has said an official MCP is coming. This proxy is the unofficial server until then.
+
+### Auth and requests
+
+- The proxy requires `Authorization: Bearer <key>` and sends that header to TutorBird unchanged. Anything else is HTTP 401. The key is not read from the server environment and is not logged.
+- Keys in these notes are **Read-Only** or **Read & Write**. TutorBird's beta Swagger calls the write key full-access. A write key changes the live account. The account owner should create it under **Business Settings → Integrations** (a multi-tutor account needs the Administrator privilege) and keep it.
+- Every upstream request sends `User-Agent`. The default is `SteelesScholars-Assistant/1.0`. Set `TUTORBIRD_USER_AGENT` on the server to override it.
+- Date-times are school-local, with no `Z` and no numeric offset. This repo records them as `yyyy-mm-dd hh:mm:ss`. The confirmed payment example uses a date-only `Timestamp` (`YYYY-MM-DD`). The beta Swagger describes `2024-01-15T14:30:00` in the school timezone. Do not send UTC.
+- Lists return every record at once. `skip`/`take` are ignored, so do not page in a loop. The proxy backs off and retries reads and PUTs on HTTP 429. It does not blindly retry a POST. `add_payment` lists transactions again before each attempt.
+
+### Tools
+
+Read tools are registered first. Each write tool says the change is live, immediate, and permanent, with no undo. There is no delete tool and no test environment. Approve a write before the client calls it. `confirm` must be `true` or the proxy does not send the write.
+
+| Tool | Method and path |
+| --- | --- |
+| `list_students` | `GET /v1/students` |
+| `get_student` | `GET /v1/students/{studentId}` |
+| `list_parents` | `GET /v1/parents` |
+| `get_parent` | `GET /v1/parents/{parentId}` |
+| `list_families` | `GET /v1/families` |
+| `get_family` | `GET /v1/families/{familyId}` |
+| `list_invoices` | `GET /v1/invoices` |
+| `list_transactions` | `GET /v1/transactions` |
+| `add_student` | `POST /v1/students` |
+| `update_student` | `PUT /v1/students/{studentId}` |
+| `add_parent` | `POST /v1/parents` |
+| `update_parent` | `PUT /v1/parents/{parentId}` |
+| `update_family_name` | `PUT /v1/families/{familyId}` (appends; not a rename) |
+| `add_payment` | `POST /v1/transactions` after `GET /v1/transactions` |
+
+`add_payment` sends `TransactionType` `Payment` and requires `StudentID`. The repo does not document a transactions search route, so the tool calls `GET /v1/transactions`, treats `reference` as `Description`, and does not post when that description is already present or the list is incomplete. `POST /v1/payments` is not called (404, `x-path-status: wrong`).
+
+Not exposed: `GET /v1/events/{eventId}` and `GET /v1/students/{studentId}/attendance` are `inferred`. Calendar search, attendance create, cancel, reschedule, and event replacement are not confirmed in this repo.
+
+### Caveats
+
+- TutorBird publishes no official OpenAPI document. `https://api.tutorbird.com/v1/swagger` is a beta Swagger UI, and its description says the API is not officially supported. This proxy follows the confirmed paths in this repo, not the rest of that Swagger file.
+- No delete. Set a student `Status` to `Inactive`.
+- Nested email does not stick on create. Set flat `EmailAddress` with PUT.
+- Parent mobile does not persist. `IsPreferredInvoiceRecipient` did not persist on parent PUT. That PUT's response body was not recorded beyond success.
+- `PUT` `FamilyName` appends `"; "` and the new text. It does not replace the name.
+- Nested family `Students` and `Parents` come back empty.
+- Student search filters are ignored.
+- `GET /v1` returns 500. It is not a health check and it is not a tool.
+- `PaymentMethod` is dropped on read-back. `AccountBalance` is the running balance (negative means the family owes). `family.Balance` reads 0. An empty `StudentID` on a payment is `400 UnparseableID`.
+- Writes are permanent. There is no dry-run.
 
 ---
 
@@ -106,6 +194,9 @@ Email and SMS events are listed by Zapier without fields. Their schemas accept a
 
 | Path | Purpose |
 | --- | --- |
+| `app/mcp/route.ts` | Streamable HTTP MCP proxy (`/mcp`) |
+| `src/` | TutorBird client, tool registration, auth gate |
+| `vercel.json` | Vercel project config |
 | `openapi/tutorbird.openapi.yaml` | OpenAPI 3.1 specification |
 | `postman/TutorBird.postman_collection.json` | Postman Collection v2.1 |
 | `postman/TutorBird.local.postman_environment.json` | Environment with `baseUrl`, `apiKey`, and sample ids |
@@ -132,9 +223,12 @@ You can also import `openapi/tutorbird.openapi.yaml` through Postman's OpenAPI i
 ## Check the spec
 
 ```bash
+npm test
 npx --yes @redocly/cli lint openapi/tutorbird.openapi.yaml
 python3 -m json.tool postman/TutorBird.postman_collection.json >/dev/null
 ```
+
+`npm test` uses a mocked upstream. It does not call `api.tutorbird.com`.
 
 ## Sources
 

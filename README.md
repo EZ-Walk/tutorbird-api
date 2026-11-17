@@ -59,9 +59,9 @@ Results (2026-10-29, run once at the account owner's request): 66 families had a
 
 Claude Desktop and similar clients cannot call this REST API directly. They need an MCP server that exposes calls as tools. This repo ships a thin Streamable HTTP proxy at `/mcp`. It forwards to `https://api.tutorbird.com`, stores no API key, and passes the caller's `Authorization` header through.
 
-**Server URL:** `https://YOUR-PROJECT.vercel.app/mcp`
+**Server URL:** `https://tutorbird-api.vercel.app/mcp`
 
-Replace that host with the Vercel deployment URL. Until a deployment exists, the placeholder is not a live server. Locally, `npm run dev` serves `http://localhost:3000/mcp`. `npm test` mocks TutorBird and does not call it.
+That host is the Vercel project `tutorbird-api`. Leave Vercel Authentication off for this project, or MCP clients cannot connect. TutorBird auth is the bearer token on `/mcp`. Locally, `npm run dev` serves `http://localhost:3000/mcp`. `npm test` mocks TutorBird and does not call it.
 
 ### Client config
 
@@ -71,7 +71,7 @@ Use one `mcpServers` entry in Claude Desktop (`claude_desktop_config.json`) or i
 {
   "mcpServers": {
     "tutorbird": {
-      "url": "https://YOUR-PROJECT.vercel.app/mcp",
+      "url": "https://tutorbird-api.vercel.app/mcp",
       "headers": {
         "Authorization": "Bearer <TUTORBIRD_API_KEY>"
       }
@@ -90,7 +90,7 @@ Clients that cannot send headers on a remote server can use `mcp-remote`:
       "args": [
         "-y",
         "mcp-remote",
-        "https://YOUR-PROJECT.vercel.app/mcp",
+        "https://tutorbird-api.vercel.app/mcp",
         "--header",
         "Authorization: Bearer <TUTORBIRD_API_KEY>"
       ]
